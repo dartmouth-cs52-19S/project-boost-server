@@ -3,9 +3,18 @@ import mongoose, { Schema } from 'mongoose';
 const bcrypt = require('bcryptjs');
 
 const UserSchema = new Schema({
-  username: { type: String, unique: true, lowercase: true },
-  email: { type: String, unique: true, lowercase: true },
-  password: { type: String },
+  user_id: { type: String, unique: true }, // taken from the uID in firebase
+  locationAlgorithmOutput: [{
+    location: String,
+  }], // stores the output of the algorithm
+  presetProductiveLocations: [String], // on initial start, user selects which places are productive or not
+  homeLocation: String, // for every user, have a "home location" that they enter
+  userInputOnProductivity: [{ // e.g. {date: May 12 2019, time: 4:00PM, location: Topliff, productivity: 1}
+    date: String,
+    time: Date,
+    location: String,
+    productivity: Number,
+  }],
 });
 
 UserSchema.set('toJSON', {
