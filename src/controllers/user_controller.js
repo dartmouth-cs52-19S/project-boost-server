@@ -4,6 +4,38 @@ import User from '../models/user_model';
 
 dotenv.config({ silent: true });
 
+// eslint-disable-next-line consistent-return
+export const createUser = (req, res, next) => {
+  const { userID } = req.body; // userID obtained from firebase sign in w. Google
+
+  if (!userID) {
+    return res.status(422).send('You must provide the firebase userID');
+  }
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      if (foundUser == null) {
+        const user = new User();
+        user._id = userID;
+        user.save()
+          .then((response) => { // if save is successfull
+            res.send({ token: tokenForUser(user), foundUser });
+          })
+          .catch((error) => { // if save throws an error
+            if (error) {
+              res.sendStatus(500);
+            }
+          });
+      } else { // if founderUser !== null
+        console.log('A user with this firebase userID already exists! Sending the info...');
+        res.send(foundUser);
+      }
+    }) // end of .then
+    .catch((err) => {
+      res.sendStatus(500);
+    });
+};
+
 export const signin = (req, res, next) => {
   User.findOne({ email: req.body.email })
     .then((result) => {
