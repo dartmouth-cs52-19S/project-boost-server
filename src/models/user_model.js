@@ -34,7 +34,7 @@ const UserSchema = new Schema({
   lastThirtyDays: [{
     type: Schema.Types.Mixed,
   }],
-});
+}, { _id: false });
 
 UserSchema.set('toJSON', {
   virtuals: true,
