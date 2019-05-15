@@ -14,12 +14,12 @@ export const createUser = (req, res, next) => {
 
   User.findOne({ _id: userID })
     .then((foundUser) => {
-      if (foundUser == null) {
+      if (foundUser === null) {
         const user = new User();
         user._id = userID;
         user.save()
           .then((response) => { // if save is successfull
-            res.send({ token: tokenForUser(user), foundUser });
+            res.send({ token: tokenForUser(user), response });
           })
           .catch((error) => { // if save throws an error
             if (error) {
