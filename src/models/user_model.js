@@ -11,7 +11,7 @@ const UserSchema = new Schema({
     name: String,
     value: String,
   }],
-});
+}, { _id: false });
 
 UserSchema.set('toJSON', {
   virtuals: true,

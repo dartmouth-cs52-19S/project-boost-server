@@ -3,8 +3,8 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import path from 'path';
 import morgan from 'morgan';
+import mongoose from 'mongoose';
 import router from './router';
-// import mongoose from 'mongoose';
 
 // initialize
 const app = express();
@@ -33,10 +33,10 @@ app.use(bodyParser.urlencoded({
 }));
 
 // DB Setup
-// const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost/blog';
-// mongoose.connect(mongoURI);
-// // set mongoose promises to es6 default
-// mongoose.Promise = global.Promise;
+const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost/boost';
+mongoose.connect(mongoURI);
+// set mongoose promises to es6 default
+mongoose.Promise = global.Promise;
 
 app.use('/api', router);
 

@@ -54,6 +54,10 @@ const computeDistance = (lat1, lon1, lat2, lon2, unit) => {
   }
 };
 
+router.post('/getAuth', (req, res, next) => {
+  Users.createUser(req, res, next);
+});
+
 router.post('/uploadGoogleLocationData', (req, res) => {
   const { locations } = req.body;
 
