@@ -6,6 +6,8 @@ import morgan from 'morgan';
 import mongoose from 'mongoose';
 import router from './router';
 
+// const multer = require('multer');
+
 // initialize
 const app = express();
 
@@ -23,6 +25,9 @@ app.use(express.static('static'));
 
 // this just allows us to render ejs from the ../app/views directory
 app.set('views', path.join(__dirname, '../src/views'));
+
+// enable multer
+// app.use(multer({ dest: './src/uploads/' }).single('file'));
 
 // enable json message body for posting data to API
 app.use(bodyParser.json({ limit: '50mb' }));
