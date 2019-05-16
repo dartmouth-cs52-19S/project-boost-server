@@ -5,6 +5,11 @@ import * as Users from './controllers/user_controller';
 import { requireSignin } from './services/passport';
 // import { requireAuth } from './services/passport';
 
+const fs = require('fs');
+const multer = require('multer');
+
+const upload = multer({ dest: 'src/uploads/' });
+
 // import firebase configuration
 const FireBaseConfig = {
   apiKey: process.env.firebase_apiKey,
@@ -58,8 +63,16 @@ router.post('/getAuth', (req, res, next) => {
   Users.createUser(req, res, next);
 });
 
-router.post('/uploadGoogleLocationData', (req, res) => {
-  const { locations } = req.body;
+router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {
+  const rawdata = fs.readFileSync(req.file.path);
+  const rawdataJSON = JSON.parse(rawdata);
+
+  // TODO: store file in S3? would be in rawdata
+
+  // delete file from server
+  fs.unlinkSync(req.file.path);
+
+  const { locations } = rawdataJSON;
 
   // clump together time observation sittings
   const sittings = [];
@@ -168,24 +181,12 @@ router.post('/uploadGoogleLocationData', (req, res) => {
 
       // final result to send to user -- should store this in db
       Promise.all(outputPromises).then(() => {
+        // TODO: store output in mongoose model
         res.send(output);
       });
     });
   });
 });
-
-// router.route('/posts')
-//   .post(requireAuth, Posts.createPost)
-//   .get((req, res) => {
-//     Posts.getPosts(req, res);
-//   });
-
-// router.route('/posts/:id')
-//   .get((req, res) => {
-//     Posts.getPost(req, res);
-//   })
-//   .put(requireAuth, Posts.updatePost)
-//   .delete(requireAuth, Posts.deletePost);
 
 router.post('/signin', requireSignin, Users.signin);
 
