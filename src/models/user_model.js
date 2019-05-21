@@ -1,4 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
+import Location from './location_model';
 
 const bcrypt = require('bcryptjs');
 
@@ -11,6 +12,11 @@ const UserSchema = new Schema({
     name: String,
     value: String,
   }],
+  backgroundLocationDataToBeProcessed: [Object],
+  frequentLocations: [Location],
+  initialUploadData: {
+    type: Schema.Types.Mixed, // mixed type means that you can store anything in this field. Mongoose won't yell at you or type cast. should be fine since we're storing the output
+  },
 }, { _id: false });
 
 UserSchema.set('toJSON', {
