@@ -1,6 +1,8 @@
+/* eslint-disable prefer-destructuring */
 import jwt from 'jwt-simple';
 import dotenv from 'dotenv';
 import User from '../models/user_model';
+import { LocationModel } from '../models/location_model';
 
 dotenv.config({ silent: true });
 
@@ -39,66 +41,63 @@ export const createUser = (req, res, next) => {
     });
 };
 
-export const signin = (req, res, next) => {
-  User.findOne({ email: req.body.email })
-    .then((result) => {
-      res.send({
-        token: tokenForUser(req.user),
-        userData: {
-          id: result.id,
-          email: result.email,
-          username: result.username,
-        },
-      });
-    })
-    .catch((error) => {
-      res.status(500).json({ error });
+export const setModelRun = (req, res, modelOutput) => {
+  const { uid } = req.body; // userID obtained from firebase sign in w. Google
+
+  if (!uid) {
+    return res.status(422).send('You must provide the firebase userID');
+  }
+
+  User.findOne({ _id: uid })
+    .then((foundUser) => {
+      if (foundUser === null) {
+        res.status(500).send(`No user exists with id: ${uid}`);
+      } else {
+        foundUser.frequentLocations = [];
+
+        const locationPromises = [];
+
+        // for each location we observed
+        modelOutput.forEach((entry) => {
+          // for each sitting we observed at that location
+          entry[Object.keys(entry)[0]].forEach((sitting) => {
+            // wrap in promise because .save() is async
+            locationPromises.push(new Promise((resolve, reject) => {
+              // create a location object for this sitting at this location
+              const locationObj = new LocationModel();
+              locationObj.latLongLocation = Object.keys(entry)[0];
+              locationObj.startTime = parseInt(sitting.startTime, 10);
+              locationObj.endTime = parseInt(sitting.endTime, 10);
+
+              // location is null, TODO: make google API call to figure out where this is
+              // productivity is null, can search on user, frequent locations .find({ productivity: null })
+
+              // save location object, then append to frequentLocations array and resolve promise
+              locationObj.save().then(() => {
+                foundUser.frequentLocations.push(locationObj);
+                resolve();
+              }).catch((err) => {
+                reject(err);
+              });
+            }));
+          });
+        });
+
+        // when all location objects for this user are created, save this user and send to res
+        Promise.all(locationPromises).then(() => {
+          foundUser.save().then(() => {
+            res.send({ message: 'success!' });
+          }).catch((err) => {
+            res.status(500).send(err);
+          });
+        });
+      }
+    }) // end of .then
+    .catch((err) => {
+      res.sendStatus(500);
     });
 };
 
-export const signup = (req, res, next) => {
-  const { email } = req.body;
-  const { password } = req.body;
-  const { username } = req.body;
-
-  if (!email || !password || !username) {
-    res.status(422).send('You must provide username, email, and password.');
-  }
-
-  // here you should do a mongo query to find if a user already exists with this email.
-  // if user exists then return an error. If not, use the User model to create a new user.
-  // Save the new User object
-  // this is similar to how you created a Post
-  // and then return a token same as you did in in signin
-  User.countDocuments({ email, username }, (err, count) => {
-    if (err) {
-      res.status(500).send(err);
-    } else if (count > 0) {
-      res.status(422).send(`A user already exists with email: ${email} and/or username: ${username}.`);
-    } else {
-      const user = new User();
-
-      user.email = email;
-      user.password = password;
-      user.username = username;
-
-      user.save()
-        .then((result) => {
-          res.send({
-            token: tokenForUser(result),
-            userData: {
-              id: result.id,
-              email: result.email,
-              username: result.username,
-            },
-          });
-        })
-        .catch((error) => {
-          res.status(500).json({ error });
-        });
-    }
-  });
-};
 
 // encodes a new token for a user object
 function tokenForUser(user) {
