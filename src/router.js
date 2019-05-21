@@ -67,8 +67,6 @@ router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {
   const rawdata = fs.readFileSync(req.file.path);
   const rawdataJSON = JSON.parse(rawdata);
 
-  // TODO: store file in S3? would be in rawdata
-
   // delete file from server
   fs.unlinkSync(req.file.path);
 
@@ -181,15 +179,10 @@ router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {
 
       // final result to send to user -- should store this in db
       Promise.all(outputPromises).then(() => {
-        // TODO: store output in mongoose model
-        res.send(output);
+        Users.setModelRun(req, res, output);
       });
     });
   });
 });
-
-router.post('/signin', requireSignin, Users.signin);
-
-router.post('/signup', Users.signup);
 
 export default router;

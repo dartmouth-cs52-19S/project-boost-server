@@ -1,5 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
-import LocationSchema from './location_model';
+import { LocationSchema } from './location_model';
 
 const bcrypt = require('bcryptjs');
 
