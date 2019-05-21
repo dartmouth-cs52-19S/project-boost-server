@@ -3,7 +3,6 @@ import mongoose, { Schema } from 'mongoose';
 // create a Location Schema
 
 const LocationSchema = new Schema({
-  user_id: { type: Schema.Types.ObjectId, ref: 'User' },
   location: String,
   latLongLocation: String,
   startTime: String,
