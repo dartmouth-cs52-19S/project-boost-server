@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import { Schema } from 'mongoose';
 
 // create a Location Schema
 
@@ -15,6 +15,6 @@ const LocationSchema = new Schema({
 });
 
 // create LocationModel class from schema
-const LocationModel = mongoose.model('Location', LocationSchema);
+// const LocationModel = mongoose.model('Location', LocationSchema);
 
-export default LocationModel;
+export default LocationSchema;

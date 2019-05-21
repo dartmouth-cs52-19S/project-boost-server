@@ -1,7 +1,9 @@
 import mongoose, { Schema } from 'mongoose';
-import Location from './location_model';
+import LocationSchema from './location_model';
 
 const bcrypt = require('bcryptjs');
+
+// const LocationSchema = require('./location_model');
 
 const UserSchema = new Schema({
   _id: { type: String, unique: true }, // taken from the uID in firebase
@@ -13,7 +15,7 @@ const UserSchema = new Schema({
     value: String,
   }],
   backgroundLocationDataToBeProcessed: [Object],
-  frequentLocations: [Location],
+  frequentLocations: [LocationSchema],
   initialUploadData: {
     type: Schema.Types.Mixed, // mixed type means that you can store anything in this field. Mongoose won't yell at you or type cast. should be fine since we're storing the output
   },
