@@ -6,7 +6,7 @@ dotenv.config({ silent: true });
 
 // eslint-disable-next-line consistent-return
 export const createUser = (req, res, next) => {
-  const { userID } = req.body; // userID obtained from firebase sign in w. Google
+  const { userID, initialUploadData } = req.body; // userID obtained from firebase sign in w. Google
 
   if (!userID) {
     return res.status(422).send('You must provide the firebase userID');
@@ -16,7 +16,10 @@ export const createUser = (req, res, next) => {
     .then((foundUser) => {
       if (foundUser === null) {
         const user = new User();
+
         user._id = userID;
+        user.initialUploadData = initialUploadData;
+
         user.save()
           .then((response) => { // if save is successfull
             res.send({ token: tokenForUser(user), response });
