@@ -1,7 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
 
-// create a Location Schema
-
 const LocationSchema = new Schema({
   location: Object,
   latLongLocation: String,
