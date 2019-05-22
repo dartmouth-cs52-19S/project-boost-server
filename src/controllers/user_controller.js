@@ -41,6 +41,104 @@ export const createUser = (req, res, next) => {
     });
 };
 
+export const updateUserSettings = (req, res, next) => {
+  const {
+    userID, homeLocation, homeLocationLatLong, presetProductiveLocations,
+  } = req.body;
+
+  User.findOne({ _id: userID }).populate('frequentLocations')
+    .exec((error, foundUser) => {
+      if (error) {
+        res.status(500).send(`Error upon saving user settings for user with id ${userID}. Could not find user.`);
+      }
+
+      else {
+        foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
+        foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
+
+        const newPresetProductiveLocations = {}; // create a new Object
+
+        presetProductiveLocations.forEach((location) => { // loop through all the objects sent from the front-end
+          const address = location.address;
+          newPresetProductiveLocations[address] = location.productivity;
+        // newPresetProductiveLocations.push({ [address]: location.productivity });
+        // newPresetProductiveLocations.push({ address: location.address, productivity: location.productivity }); // 2d
+        });
+
+        if (Object.keys(newPresetProductiveLocations).length !== 0) {
+          foundUser.presetProductiveLocations = newPresetProductiveLocations;
+        }
+
+        // end result should be foundUser.presetProductiveLocations = [ {"9 Maynard Street, Hanover, NH": 5}, {"Dartmouth Street, Boston, MA,USA: 3} ]
+
+        foundUser.save()
+          .then((response) => {
+            console.log(`Success saving user settings for user with id ${userID}`);
+          })
+          .catch((err) => {
+            if (err) {
+              res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
+            }
+          });
+
+        // now, go into all the locations of this user and set strings and productivities respectively
+
+        const allPresetProductiveLocationAddresses = Object.keys(presetProductiveLocations);
+
+        foundUser.frequentLocations.forEach((locationObj) => {
+          if (allPresetProductiveLocationAddresses.includes(locationObj.location)) {
+            locationObj.productivity = presetProductiveLocations[locationObj.location];
+          }
+
+        // then must save the Location Object
+        });
+      } });
+};
+
+
+// old updateUserSettings before doing .populate and removing entire Location Object from User Model:
+
+/* export const updateUserSettings = (req, res, next) => {
+  const {
+    userID, homeLocation, homeLocationLatLong, presetProductiveLocations,
+  } = req.body;
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
+      foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
+
+      const newPresetProductiveLocations = []; // create a temp array
+
+      presetProductiveLocations.forEach((location) => { // loop through all the objects sent from the front-end
+        const address = location.address;
+        newPresetProductiveLocations.push({ [address]: location.productivity });
+        // newPresetProductiveLocations.push({ address: location.address, productivity: location.productivity }); // 2d
+      });
+
+      if (newPresetProductiveLocations !== 0) {
+        foundUser.presetProductiveLocations = newPresetProductiveLocations;
+      }
+
+      // end result should be foundUser.presetProductiveLocations = [ {"9 Maynard Street, Hanover, NH": 5}, {"Dartmouth Street, Boston, MA,USA: 3} ]
+
+      foundUser.save()
+        .then((response) => {
+          console.log(`Success saving user settings for user with id ${userID}`);
+        })
+        .catch((error) => {
+          if (error) {
+            res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
+          }
+        });
+
+      // now, go into all the locations of this user and set strings and productivities respectively
+    })
+    .catch((error) => {
+      res.status(500).send(`Error finding user with id ${userID}`);
+    });
+}; */
+
 export const setModelRun = (req, res, modelOutput) => {
   const { uid } = req.body; // userID obtained from firebase sign in w. Google
 

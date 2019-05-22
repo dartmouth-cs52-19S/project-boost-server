@@ -63,6 +63,10 @@ router.post('/getAuth', (req, res, next) => {
   Users.createUser(req, res, next);
 });
 
+router.put('/updateUserSettings', (req, res, next) => {
+  Users.updateUserSettings(req, res, next);
+});
+
 router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {
   const rawdata = fs.readFileSync(req.file.path);
   const rawdataJSON = JSON.parse(rawdata);

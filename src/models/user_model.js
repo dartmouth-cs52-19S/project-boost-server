@@ -1,5 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
-import { LocationSchema } from './location_model';
+import { LocationSchema, LocationModel } from './location_model';
 
 const bcrypt = require('bcryptjs');
 
@@ -7,15 +7,20 @@ const bcrypt = require('bcryptjs');
 
 const UserSchema = new Schema({
   _id: { type: String, unique: true }, // taken from the uID in firebase
-  presetProductiveLocations: [String], // on initial start, user selects which places are productive or not
+  presetProductiveLocations: {
+    type: Schema.Types.Mixed,
+  }, // [Object], // on initial start, user selects which places are productive or not
   homeLocation: String, // for every user, have a "home location" that they enter
   latlongHomeLocation: String, // convert "home location" into a lat long e.g. "43.7041448 , -72.2890539"
-  settings: [{ // e.g. [ {name: backgroundColor, value: red}, { name: lang, value: FR}, { name: nightMode value: true} ]
+  /*   settings: [{ // e.g. [ {name: backgroundColor, value: red}, { name: lang, value: FR}, { name: nightMode value: true} ]
     name: String,
     value: String,
-  }],
+  }], */
   backgroundLocationDataToBeProcessed: [Object],
-  frequentLocations: [LocationSchema],
+  frequentLocations: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Location',
+  }], //  [LocationSchema]
   initialUploadData: {
     type: Schema.Types.Mixed, // mixed type means that you can store anything in this field. Mongoose won't yell at you or type cast. should be fine since we're storing the output
   },
