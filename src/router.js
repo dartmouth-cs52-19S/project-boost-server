@@ -2,8 +2,6 @@ import { Router } from 'express';
 import { Map } from 'immutable';
 import * as firebase from 'firebase';
 import * as Users from './controllers/user_controller';
-import { requireSignin } from './services/passport';
-// import { requireAuth } from './services/passport';
 
 const fs = require('fs');
 const multer = require('multer');
