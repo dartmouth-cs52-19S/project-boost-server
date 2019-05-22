@@ -20,7 +20,11 @@ const getLocationInfo = (coords) => {
           };
           resolve(locationData);
         } else {
-          resolve({});
+          resolve({
+            formatted_address: '',
+            place_id: '',
+            types: '',
+          });
         }
       })
       .catch((error) => {

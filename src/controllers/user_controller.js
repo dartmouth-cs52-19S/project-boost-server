@@ -64,7 +64,7 @@ const setGoogleLocationInfo = (uid) => {
         foundUser.frequentLocations.forEach((locationObj) => {
           promises.push(new Promise((resolve, reject) => {
             // ensure we don't already have info on this location
-            if (locationObj.location === undefined) {
+            if (Object.keys(locationObj.location).length === 0) {
               // if we haven't come across this location already, either check other location objects or the google api for more info
               if (!locationsObserved.includes(locationObj.latLongLocation)) {
                 // mark that we will soon know more about this location, so other location objects here can wait to get the information
@@ -84,13 +84,18 @@ const setGoogleLocationInfo = (uid) => {
                         foundPromises.push(new Promise((resolve, reject) => {
                           if (foundLocation !== null) {
                             // make sure this location object has google data in it
-                            if (foundLocation.location !== null && Object.keys(foundLocation.location).length > 0) {
-                              // store result in object
-                              locationObj.location = foundLocation.location;
+                            if (foundLocation.location !== null && foundLocation.location !== undefined) {
+                              if (Object.keys(foundLocation.location).length > 0) {
+                                // store result in object
+                                locationObj.location = foundLocation.location;
 
-                              // cache the result to grab after the promises resolve
-                              discoveredLocations[locationObj.latLongLocation] = foundLocation.location;
-                              foundInfo = true;
+                                // cache the result to grab after the promises resolve
+                                discoveredLocations[locationObj.latLongLocation] = foundLocation.location;
+                                foundInfo = true;
+                                resolve(locationObj);
+                              }
+                            } else {
+                              foundLocation.location = {};
                               resolve(locationObj);
                             }
                           }
@@ -117,7 +122,6 @@ const setGoogleLocationInfo = (uid) => {
                           }
                         })
                         .catch((error) => {
-                          console.error(error);
                           locationObj.location = {};
                           resolve(locationObj);
                         });
@@ -150,6 +154,8 @@ const setGoogleLocationInfo = (uid) => {
                 locationObj.location = {};
                 resolve(locationObj);
               }
+            } else {
+              resolve(locationObj);
             }
           }));
         });
