@@ -2,8 +2,7 @@ import { Router } from 'express';
 import { Map } from 'immutable';
 import * as firebase from 'firebase';
 import * as Users from './controllers/user_controller';
-import { requireSignin } from './services/passport';
-// import { requireAuth } from './services/passport';
+import { subtractMinutes, computeDistance } from './constants/distance_time';
 
 const fs = require('fs');
 const multer = require('multer');
@@ -27,44 +26,15 @@ if (!firebase.apps.length) {
 
 const router = Router();
 
-// subtract numMinutes from timestamp in epoch
-const subtractMinutes = (timestamp, numMinutes) => {
-  return timestamp - (numMinutes * 60 * 1000);
-};
-
-// taken from: https://www.geodatasource.com/developers/javascript
-const computeDistance = (lat1, lon1, lat2, lon2, unit) => {
-  if (lat1 === lat2 && lon1 === lon2) {
-    return 0;
-  } else {
-    const radlat1 = (Math.PI * lat1) / 180;
-    const radlat2 = (Math.PI * lat2) / 180;
-    const theta = lon1 - lon2;
-    const radtheta = (Math.PI * theta) / 180;
-    let dist = Math.sin(radlat1) * Math.sin(radlat2)
-          + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
-    if (dist > 1) {
-      dist = 1;
-    }
-    dist = Math.acos(dist);
-    dist = (dist * 180) / Math.PI;
-    dist = dist * 60 * 1.1515;
-    if (unit === 'K') {
-      dist *= 1.609344;
-    }
-    if (unit === 'N') {
-      dist *= 0.8684;
-    }
-    return dist;
-  }
-};
-
 router.post('/getAuth', (req, res, next) => {
   Users.createUser(req, res, next);
 });
 
 router.put('/updateUserSettings', (req, res, next) => {
   Users.updateUserSettings(req, res, next);
+  
+router.post('/storeBackgroundData', (req, res, next) => {
+  Users.storeBackgroundData(req, res, next);
 });
 
 router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {

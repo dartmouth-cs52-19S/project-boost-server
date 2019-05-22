@@ -78,7 +78,7 @@ export const updateUserSettings = (req, res, next) => {
 
       // now, go into all the locations of this user and set strings and productivities respectively
 
-      const allPresetProductiveLocationAddresses = Object.keys(presetProductiveLocations);
+      const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
 
       const promises = [];
 
