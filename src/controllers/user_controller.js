@@ -26,6 +26,13 @@ const createUser = (req, res, next) => {
 
         user._id = userID;
         user.initialUploadData = initialUploadData;
+        user.presetProductiveLocations = {};
+        user.settings = {};
+        user.homeLocation = '';
+        user.latlongHomeLocation = '';
+        user.backgroundLocationDataToBeProcessed = [];
+        user.frequentLocations = [];
+        user.initialUploadData = {};
 
         user.save()
           .then((response) => { // if save is successfull
@@ -44,7 +51,7 @@ const createUser = (req, res, next) => {
               res.sendStatus(500);
             }
           });
-      } else { // if founderUser !== null
+      } else {
         console.log('A user with this firebase uid already exists! Sending the info...');
         res.send({
           presetProductiveLocations: foundUser.presetProductiveLocations,
