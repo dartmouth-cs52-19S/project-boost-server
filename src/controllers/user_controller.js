@@ -248,7 +248,7 @@ const setGoogleLocationInfo = (uid) => {
 
               // if this location is also a location the user set as a productive location, set the productivity
               if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
-                locationObj.productivity = foundUser.presetProductiveLocations[0][locationObj.location.formatted_address];
+                locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
               }
 
               resolve();
