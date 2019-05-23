@@ -358,7 +358,6 @@ const addToFrequentLocations = (uid, dataToBeProcessed) => {
 };
 
 // ROBBIE: CALL THIS FUNCTION EACH NIGHT AT 7PM TO PROCESS THE WAITING DATA IN THE USER'S POOL
-
 // go through a user's background location data and add to their frequent locations
 const processBackgroundLocationData = (uid) => {
   User.findOne({ _id: uid })
