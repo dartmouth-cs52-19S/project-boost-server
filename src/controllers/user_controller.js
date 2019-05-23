@@ -77,8 +77,8 @@ export const updateUserSettings = (req, res, next) => {
       });
 
       // add all items sent from front-end
-      presetProductiveLocations.forEach((location) => {
-        newPresetProductiveLocations[location.address] = location.productivity;
+      Object.keys(presetProductiveLocations).forEach((address) => {
+        newPresetProductiveLocations[address] = presetProductiveLocations[address];
       });
 
       // store in mongo
