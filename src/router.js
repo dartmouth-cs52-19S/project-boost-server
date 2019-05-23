@@ -42,6 +42,10 @@ router.get('/mostProductiveLocationsRanked', (req, res, next) => {
   Users.getMostProductiveLocationsRanked(req, res, next);
 });
 
+router.get('/productivityScoresLastThirtyDays', (req, res, next) => {
+  Users.getProductivityScoresLastThirtyDays(req, res, next);
+});
+
 router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {
   const rawdata = fs.readFileSync(req.file.path);
   const rawdataJSON = JSON.parse(rawdata);

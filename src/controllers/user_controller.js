@@ -705,6 +705,66 @@ const getMostProductiveLocationsRanked = (req, res, next) => {
     });
 };
 
+// get average productivity in last thirty days
+const getProductivityScoresLastThirtyDays = (req, res, next) => {
+  if (!req.query.uid) {
+    res.status(500).send('You must provide a valid user id');
+  }
+
+  User.findOne({ _id: req.query.uid })
+    .then((foundUser) => {
+      // grab all location objects for this user that occured in the last thirty days
+      const locationObjectsInLastThirtyDays = {};
+
+      foundUser.frequentLocations.forEach((locationObj) => {
+        // check if in last thirty days
+        if ((new Date().getTime() - locationObj.endTime) / (1000 * 60 * 60 * 24) <= 30) {
+          // generate nicely formatted date string
+          const date = new Date(locationObj.endTime);
+          const formatted = `${date.getMonth() + 1}/${date.getDate() < 10 ? `0${date.getDate()}` : date.getDate()}/${date.getFullYear()}`;
+
+          // store in collection on that day
+          if (locationObjectsInLastThirtyDays[formatted]) {
+            locationObjectsInLastThirtyDays[formatted].push(locationObj);
+          } else {
+            locationObjectsInLastThirtyDays[formatted] = [];
+            locationObjectsInLastThirtyDays[formatted].push(locationObj);
+          }
+        }
+      });
+
+      // sort the object keys by date
+      const locationsOrderedByDate = {};
+
+      Object.keys(locationObjectsInLastThirtyDays).sort().forEach((key) => {
+        locationsOrderedByDate[key] = locationObjectsInLastThirtyDays[key];
+      });
+
+      // build the output to send to the user with averaged values
+      const output = {};
+
+      Object.keys(locationsOrderedByDate).forEach((date) => {
+        const dateObservations = locationsOrderedByDate[date];
+
+        // sum up productivity levels and count productivity levels
+        let sum = 0;
+        let count = 0;
+
+        dateObservations.forEach((obs) => {
+          count += 1;
+          sum += obs.productivity ? obs.productivity : 0;
+        });
+
+        output[date] = (count === 0 ? 0 : sum / count);
+      });
+
+      res.send(output);
+    })
+    .catch(() => {
+      res.status(500).send(`No user found with id: ${req.query.uid}`);
+    });
+};
+
 // encodes a new token for a user object
 function tokenForUser(user) {
   const timestamp = new Date().getTime();
@@ -712,5 +772,5 @@ function tokenForUser(user) {
 }
 
 export {
-  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked,
+  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getProductivityScoresLastThirtyDays,
 };
