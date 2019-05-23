@@ -48,6 +48,66 @@ const createUser = (req, res, next) => {
     });
 };
 
+export const updateUserSettings = (req, res, next) => {
+  const {
+    userID, homeLocation, homeLocationLatLong, presetProductiveLocations,
+  } = req.body;
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
+      foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
+
+      const newPresetProductiveLocations = {}; // create a new Object
+
+      presetProductiveLocations.forEach((location) => { // loop through all the objects sent from the front-end
+        const address = location.address;
+        newPresetProductiveLocations[address] = location.productivity;
+      });
+
+      if (Object.keys(newPresetProductiveLocations).length !== 0) {
+        foundUser.presetProductiveLocations = newPresetProductiveLocations;
+      }
+
+      // end result should be foundUser.presetProductiveLocations = [ {"9 Maynard Street, Hanover, NH": 5}, {"Dartmouth Street, Boston, MA,USA: 3} ]
+      foundUser.save()
+        .then((response) => {
+          console.log(`Success saving user settings for user with id ${userID}`);
+        })
+        .catch((err) => {
+          if (err) {
+            res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
+          }
+        });
+
+      // now, go into all the locations of this user and set strings and productivities respectively
+      const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
+      const promises = [];
+
+      foundUser.frequentLocations.forEach((locationObj) => {
+        if (allPresetProductiveLocationAddresses.includes(locationObj.location)) {
+          locationObj.productivity = presetProductiveLocations[locationObj.location];
+        }
+
+        // then must save the Location Object
+        promises.push(locationObj.save());
+      });
+
+      Promise.all(promises)
+        .then((results) => {
+          console.log(results);
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    })
+    .catch((error) => {
+      if (error) {
+        res.status(500).send(`Error upon saving user settings for user with id ${userID}. Could not find user.`);
+      }
+    });
+};
+
 // convert lat longs for each location object of a user from their background location to actual google places
 const setGoogleLocationInfo = (uid) => {
   User.findOne({ _id: uid })

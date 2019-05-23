@@ -30,6 +30,10 @@ router.post('/getAuth', (req, res, next) => {
   Users.createUser(req, res, next);
 });
 
+router.put('/updateUserSettings', (req, res, next) => {
+  Users.updateUserSettings(req, res, next);
+});
+
 router.post('/storeBackgroundData', (req, res, next) => {
   Users.storeBackgroundData(req, res, next);
 });
