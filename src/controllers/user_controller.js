@@ -547,8 +547,6 @@ const processBackgroundLocationData = (uid) => {
     });
 };
 
-processBackgroundLocationData('vSBrHUpwFZPqGIisDcBPS6cuLTx1');
-
 // encodes a new token for a user object
 function tokenForUser(user) {
   const timestamp = new Date().getTime();
