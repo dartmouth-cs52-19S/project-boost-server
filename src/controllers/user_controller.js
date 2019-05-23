@@ -69,36 +69,44 @@ export const updateUserSettings = (req, res, next) => {
         foundUser.presetProductiveLocations = newPresetProductiveLocations;
       }
 
-      // end result should be foundUser.presetProductiveLocations = [ {"9 Maynard Street, Hanover, NH": 5}, {"Dartmouth Street, Boston, MA,USA: 3} ]
-      foundUser.save()
-        .then((response) => {
-          console.log(`Success saving user settings for user with id ${userID}`);
-        })
-        .catch((err) => {
-          if (err) {
-            res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
-          }
-        });
-
       // now, go into all the locations of this user and set strings and productivities respectively
-      const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
+      const allPresetProductiveLocationAddresses = [];
       const promises = [];
 
-      foundUser.frequentLocations.forEach((locationObj) => {
-        if (allPresetProductiveLocationAddresses.includes(locationObj.location)) {
-          locationObj.productivity = presetProductiveLocations[locationObj.location];
-        }
+      foundUser.presetProductiveLocations.forEach((location) => {
+        allPresetProductiveLocationAddresses.push(Object.keys(location)[0]);
+      });
 
-        // then must save the Location Object
-        promises.push(locationObj.save());
+      foundUser.frequentLocations.forEach((locationObj) => {
+        promises.push(new Promise((resolve, reject) => {
+          if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
+            if (!locationObj.productivity) {
+              const prodLocation = presetProductiveLocations.find((element) => {
+                return element.address === locationObj.location.formatted_address;
+              });
+
+              locationObj.productivity = prodLocation.productivity;
+            }
+          }
+          resolve();
+        }));
       });
 
       Promise.all(promises)
         .then((results) => {
-          console.log(results);
+          // end result should be foundUser.presetProductiveLocations = [ {"9 Maynard Street, Hanover, NH": 5}, {"Dartmouth Street, Boston, MA,USA: 3} ]
+          foundUser.save()
+            .then((response) => {
+              res.send({ message: `Success saving user settings for user with id ${userID}` });
+            })
+            .catch((err) => {
+              if (err) {
+                res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
+              }
+            });
         })
         .catch((error) => {
-          console.log(error);
+          res.status(500).send(error);
         });
     })
     .catch((error) => {
