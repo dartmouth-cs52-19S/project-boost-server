@@ -70,14 +70,18 @@ export const updateUserSettings = (req, res, next) => {
 
       const newPresetProductiveLocations = {}; // create a new Object
 
-      presetProductiveLocations.forEach((location) => { // loop through all the objects sent from the front-end
+      // initialize user's preset productive locations
+      Object.keys(foundUser.presetProductiveLocations).forEach((address) => {
+        newPresetProductiveLocations[address] = foundUser.presetProductiveLocations[address];
+      });
+
+      // add all items sent from front-end
+      presetProductiveLocations.forEach((location) => {
         newPresetProductiveLocations[location.address] = location.productivity;
       });
 
-      // add to user's preset productive locations
-      Object.keys(newPresetProductiveLocations).forEach((address) => {
-        foundUser.presetProductiveLocations[address] = newPresetProductiveLocations[address];
-      });
+      // store in mongo
+      foundUser.presetProductiveLocations = newPresetProductiveLocations;
 
       // now, go into all the locations of this user and set strings and productivities respectively
       const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
@@ -96,7 +100,7 @@ export const updateUserSettings = (req, res, next) => {
 
       Promise.all(promises)
         .then((results) => {
-          // end result should be foundUser.presetProductiveLocations = [ {"9 Maynard Street, Hanover, NH": 5}, {"Dartmouth Street, Boston, MA,USA: 3} ]
+          // end result should be foundUser.presetProductiveLocations = { "9 Maynard Street, Hanover, NH": 5, "Dartmouth Street, Boston, MA,USA": 3 }
           foundUser.save()
             .then((response) => {
               res.send({ message: `Success saving user settings for user with id ${userID}` });
