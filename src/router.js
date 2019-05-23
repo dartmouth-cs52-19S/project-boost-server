@@ -42,6 +42,10 @@ router.get('/mostProductiveLocationsRanked', (req, res, next) => {
   Users.getMostProductiveLocationsRanked(req, res, next);
 });
 
+router.get('/mostFrequentlyVisitedLocationsRanked', (req, res, next) => {
+  Users.getMostFrequentlyVisitedLocationsRanked(req, res, next);
+});
+
 router.get('/productivityScoresLastThirtyDays', (req, res, next) => {
   Users.getProductivityScoresLastThirtyDays(req, res, next);
 });

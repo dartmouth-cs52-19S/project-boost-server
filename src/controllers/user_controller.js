@@ -597,36 +597,38 @@ const getMostProductiveLocationsRanked = (req, res, next) => {
 
       // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
       foundUser.frequentLocations.forEach((locationObj) => {
-        promises.push(new Promise((resolve, reject) => {
-          if (currentAddress === null) {
-            currentAddress = locationObj.location.formatted_address;
-            currentSum = locationObj.productivity ? locationObj.productivity : 0;
-            currentCount = 1;
-          }
-          else if (currentAddress !== locationObj.location.formatted_address) {
-            if (locationMetrics[currentAddress]) {
-              locationMetrics[currentAddress] = {
-                timesObserved: locationMetrics[currentAddress].timesObserved + currentCount,
-                sumOfProductivity: locationMetrics[currentAddress].sumOfProductivity + currentSum,
-              };
-            } else {
-              locationMetrics[currentAddress] = {
-                timesObserved: currentCount,
-                sumOfProductivity: currentSum,
-              };
+        if (locationObj.location.formatted_address) {
+          promises.push(new Promise((resolve, reject) => {
+            if (currentAddress === null) {
+              currentAddress = locationObj.location.formatted_address;
+              currentSum = locationObj.productivity ? locationObj.productivity : 0;
+              currentCount = 1;
+            }
+            else if (currentAddress !== locationObj.location.formatted_address) {
+              if (locationMetrics[currentAddress]) {
+                locationMetrics[currentAddress] = {
+                  timesObserved: locationMetrics[currentAddress].timesObserved + currentCount,
+                  sumOfProductivity: locationMetrics[currentAddress].sumOfProductivity + currentSum,
+                };
+              } else {
+                locationMetrics[currentAddress] = {
+                  timesObserved: currentCount,
+                  sumOfProductivity: currentSum,
+                };
+              }
+
+              currentAddress = null;
+              currentSum = 0;
+              currentCount = 0;
+            }
+            else {
+              currentSum += locationObj.productivity ? locationObj.productivity : 0;
+              currentCount += 1;
             }
 
-            currentAddress = null;
-            currentSum = 0;
-            currentCount = 0;
-          }
-          else {
-            currentSum += locationObj.productivity ? locationObj.productivity : 0;
-            currentCount += 1;
-          }
-
-          resolve();
-        }));
+            resolve();
+          }));
+        }
       });
 
       Promise.all(promises)
@@ -712,6 +714,86 @@ const getMostProductiveLocationsRanked = (req, res, next) => {
     });
 };
 
+const getMostFrequentlyVisitedLocationsRanked = (req, res, next) => {
+  if (!req.query.uid) {
+    res.status(500).send('You must provide a valid user id');
+  }
+
+  if (!req.query.numberOfItems) {
+    res.status(500).send('You must provide the number of items you would like to receive');
+  }
+
+  User.findOne({ _id: req.query.uid })
+    .then((foundUser) => {
+      const locationMetrics = {};
+      const promises = [];
+
+      let currentAddress = null;
+      let currentCount = 0;
+
+      // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
+      foundUser.frequentLocations.forEach((locationObj) => {
+        if (locationObj.location.formatted_address) {
+          promises.push(new Promise((resolve, reject) => {
+            if (currentAddress === null) {
+              currentAddress = locationObj.location.formatted_address;
+              currentCount = 1;
+            }
+            else if (currentAddress !== locationObj.location.formatted_address) {
+              if (locationMetrics[currentAddress]) {
+                locationMetrics[currentAddress] = locationMetrics[currentAddress].timesObserved + currentCount;
+              } else {
+                locationMetrics[currentAddress] = currentCount;
+              }
+
+              currentAddress = null;
+              currentCount = 0;
+            }
+            else {
+              currentCount += 1;
+            }
+
+            resolve();
+          }));
+        }
+      });
+
+      Promise.all(promises)
+        .then((result) => {
+          const locationInfoSummarized = [];
+
+          // create an object with this info
+          Object.keys(locationMetrics).forEach((locationName) => {
+            locationInfoSummarized.push({
+              address: locationName,
+              timesObserved: locationMetrics[locationName],
+            });
+          });
+
+          // sort objects by averageProductivity
+          locationInfoSummarized.sort((a, b) => {
+            if (a.timesObserved < b.timesObserved) {
+              return 1;
+            }
+            if (a.timesObserved > b.timesObserved) {
+              return -1;
+            }
+            return 0;
+          });
+
+          // grab the top n most productive locations as measured by average productivity
+          const output = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
+          res.send({ output });
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
+    })
+    .catch((error) => {
+      res.status(500).send(`User with id: ${req.query.uid} was not found`);
+    });
+};
+
 // get average productivity in last thirty days
 const getProductivityScoresLastThirtyDays = (req, res, next) => {
   if (!req.query.uid) {
@@ -779,5 +861,5 @@ function tokenForUser(user) {
 }
 
 export {
-  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getProductivityScoresLastThirtyDays,
+  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getMostFrequentlyVisitedLocationsRanked, getProductivityScoresLastThirtyDays,
 };
