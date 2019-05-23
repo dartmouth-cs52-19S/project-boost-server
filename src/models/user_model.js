@@ -6,10 +6,7 @@ const UserSchema = new Schema({
   presetProductiveLocations: Object, // on initial start, user selects which places are productive or not
   homeLocation: String, // for every user, have a "home location" that they enter
   latlongHomeLocation: String, // convert "home location" into a lat long e.g. "43.7041448 , -72.2890539"
-  settings: [{ // e.g. [ {name: backgroundColor, value: red}, { name: lang, value: FR}, { name: nightMode value: true} ]
-    name: String,
-    value: String,
-  }],
+  settings: Object, // e.g. { darkMode: activated, dataProcessingTime: "18:00" }
   backgroundLocationDataToBeProcessed: [Object],
   frequentLocations: [LocationSchema],
   initialUploadData: {

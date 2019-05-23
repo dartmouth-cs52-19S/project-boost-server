@@ -6,6 +6,7 @@ import { Map } from 'immutable';
 import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
+import groupBy from '../constants/group_by';
 import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
@@ -567,10 +568,209 @@ const processBackgroundLocationData = (uid) => {
     });
 };
 
+// get the top n most productive locations by average productivity level
+// tie breakers are ranked by number of times the location was observed
+const getMostProductiveLocationsRanked = (req, res, next) => {
+  if (!req.query.uid) {
+    res.status(500).send('You must provide a valid user id');
+  }
+
+  if (!req.query.numberOfItems) {
+    res.status(500).send('You must provide the number of items you would like to receive');
+  }
+
+  User.findOne({ _id: req.query.uid })
+    .then((foundUser) => {
+      const locationMetrics = {};
+      const promises = [];
+
+      let currentAddress = null;
+      let currentSum = 0;
+      let currentCount = 0;
+
+      // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
+      foundUser.frequentLocations.forEach((locationObj) => {
+        promises.push(new Promise((resolve, reject) => {
+          if (currentAddress === null) {
+            currentAddress = locationObj.location.formatted_address;
+            currentSum = locationObj.productivity ? locationObj.productivity : 0;
+            currentCount = 1;
+          }
+          else if (currentAddress !== locationObj.location.formatted_address) {
+            if (locationMetrics[currentAddress]) {
+              locationMetrics[currentAddress] = {
+                timesObserved: locationMetrics[currentAddress].timesObserved + currentCount,
+                sumOfProductivity: locationMetrics[currentAddress].sumOfProductivity + currentSum,
+              };
+            } else {
+              locationMetrics[currentAddress] = {
+                timesObserved: currentCount,
+                sumOfProductivity: currentSum,
+              };
+            }
+
+            currentAddress = null;
+            currentSum = 0;
+            currentCount = 0;
+          }
+          else {
+            currentSum += locationObj.productivity ? locationObj.productivity : 0;
+            currentCount += 1;
+          }
+
+          resolve();
+        }));
+      });
+
+      Promise.all(promises)
+        .then((result) => {
+          const summaryPromises = [];
+
+          // once all metrics have been determined, summarize them into average productivity and times observed
+          Object.keys(locationMetrics).forEach((locationName) => {
+            summaryPromises.push(new Promise((resolve, reject) => {
+              locationMetrics[locationName] = {
+                averageProductivity: locationMetrics[locationName].sumOfProductivity / locationMetrics[locationName].timesObserved,
+                timesObserved: locationMetrics[locationName].timesObserved,
+              };
+              resolve();
+            }));
+          });
+
+          Promise.all(summaryPromises)
+            .then(() => {
+              const locationInfoSummarized = [];
+
+              // create an object with this info
+              Object.keys(locationMetrics).forEach((locationName) => {
+                locationInfoSummarized.push({
+                  address: locationName,
+                  averageProductivity: locationMetrics[locationName].averageProductivity,
+                  timesObserved: locationMetrics[locationName].timesObserved,
+                });
+              });
+
+              // sort objects by averageProductivity
+              locationInfoSummarized.sort((a, b) => {
+                if (a.averageProductivity < b.averageProductivity) {
+                  return 1;
+                }
+                if (a.averageProductivity > b.averageProductivity) {
+                  return -1;
+                }
+                return 0;
+              });
+
+              // grab the top n most productive locations as measured by average productivity
+              const topFive = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
+
+              // break into categories by productivity level
+              const split = groupBy(topFive, 'averageProductivity');
+
+              // for each item at a productivity level, sort by the times it has been observed
+              Object.keys(split).forEach((rank) => {
+                split[rank].sort((a, b) => {
+                  if (a.timesObserved < b.timesObserved) {
+                    return -1;
+                  }
+                  if (a.timesObserved > b.timesObserved) {
+                    return 1;
+                  }
+                  return 0;
+                });
+              });
+
+              const output = [];
+
+              // put the top five observations back together
+              // by sorting the subcollections, we return the top five most productive locations with a tiebreaker being the number of times the location was observed
+              Object.keys(split).forEach((rank) => {
+                split[rank].forEach((location) => {
+                  output.unshift(location);
+                });
+              });
+
+              res.send({ output });
+            })
+            .catch((error) => {
+              res.status(500).send(error);
+            });
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
+    })
+    .catch((error) => {
+      res.status(500).send(`User with id: ${req.query.uid} was not found`);
+    });
+};
+
+// get average productivity in last thirty days
+const getProductivityScoresLastThirtyDays = (req, res, next) => {
+  if (!req.query.uid) {
+    res.status(500).send('You must provide a valid user id');
+  }
+
+  User.findOne({ _id: req.query.uid })
+    .then((foundUser) => {
+      // grab all location objects for this user that occured in the last thirty days
+      const locationObjectsInLastThirtyDays = {};
+
+      foundUser.frequentLocations.forEach((locationObj) => {
+        // check if in last thirty days
+        if ((new Date().getTime() - locationObj.endTime) / (1000 * 60 * 60 * 24) <= 30) {
+          // generate nicely formatted date string
+          const date = new Date(locationObj.endTime);
+          const formatted = `${date.getMonth() + 1}/${date.getDate() < 10 ? `0${date.getDate()}` : date.getDate()}/${date.getFullYear()}`;
+
+          // store in collection on that day
+          if (locationObjectsInLastThirtyDays[formatted]) {
+            locationObjectsInLastThirtyDays[formatted].push(locationObj);
+          } else {
+            locationObjectsInLastThirtyDays[formatted] = [];
+            locationObjectsInLastThirtyDays[formatted].push(locationObj);
+          }
+        }
+      });
+
+      // sort the object keys by date
+      const locationsOrderedByDate = {};
+
+      Object.keys(locationObjectsInLastThirtyDays).sort().forEach((key) => {
+        locationsOrderedByDate[key] = locationObjectsInLastThirtyDays[key];
+      });
+
+      // build the output to send to the user with averaged values
+      const output = {};
+
+      Object.keys(locationsOrderedByDate).forEach((date) => {
+        const dateObservations = locationsOrderedByDate[date];
+
+        // sum up productivity levels and count productivity levels
+        let sum = 0;
+        let count = 0;
+
+        dateObservations.forEach((obs) => {
+          count += 1;
+          sum += obs.productivity ? obs.productivity : 0;
+        });
+
+        output[date] = (count === 0 ? 0 : sum / count);
+      });
+
+      res.send(output);
+    })
+    .catch(() => {
+      res.status(500).send(`No user found with id: ${req.query.uid}`);
+    });
+};
+
 // encodes a new token for a user object
 function tokenForUser(user) {
   const timestamp = new Date().getTime();
   return jwt.encode({ sub: user.id, iat: timestamp }, process.env.AUTH_SECRET);
 }
 
-export { createUser, setModelRun, storeBackgroundData };
+export {
+  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getProductivityScoresLastThirtyDays,
+};
