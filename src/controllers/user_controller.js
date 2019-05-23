@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { Map } from 'immutable';
 import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
+
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
 import getLocationInfo from '../services/google_api';
 
@@ -115,6 +116,133 @@ export const updateUserSettings = (req, res, next) => {
       }
     });
 };
+
+export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) => {
+  const { userID, days } = req.body;
+
+  // const days = 14; // last 14 days . if days = 7, find all locations w. productivity == null in last 7 days
+
+  User.aggregate([
+    { $match: { _id: userID } },
+    { $project: { frequentLocations: 1, _id: 0 } }])
+    .then((foundLocations, error) => {
+      const foundLocations1 = foundLocations[0].frequentLocations;
+      const timeStampOfExactlyOneWeekAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
+      const onlyFilteredLocationObjs = foundLocations1.filter((locationObj) => {
+        return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyOneWeekAgo;
+      });
+
+      console.log(timeStampOfExactlyOneWeekAgo);
+
+      console.log(onlyFilteredLocationObjs.length);
+
+      res.send(onlyFilteredLocationObjs);
+      // res.send(foundLocations[0].frequentLocations);
+    })
+    .catch((error) => {
+      res.status(500).send(error);
+    });
+
+  // { $unwind: '$frequentLocations' },
+  // { $match: { productivity: null } },
+  // { $limit: 5 }])
+
+  // User.findOne({ _id: userID })
+  //   .then((foundUser) => {
+  //     // res.send({ message: 'success!' });
+  //     res.send(foundUser);
+  //     // res.send(foundUser.frequentLocations); // find all its locations. test this in Postman!
+  //   })
+  //   .catch((error) => {
+  //     res.status(500).send(error);
+  //   });
+};
+
+export const updateProductivityLevel = (req, res, next) => {
+  const { userID, productivity } = req.body;
+  const { locationID } = req.params;
+
+  console.log('you hit the route!');
+
+  User.findOne({ _id: userID }, { frequentLocations: 1 })
+    .then((foundUser) => {
+      console.log('you found the user!');
+
+      const foundLocationObj = foundUser.frequentLocations.id(locationID);
+      foundLocationObj.productivity = productivity;
+
+      console.log(foundLocationObj);
+      // res.send(foundLocationObj);
+
+      console.log('yay!');
+
+      foundUser.save()
+        .then((updatedUserandLocationObj) => {
+          console.log('Successfully saved!');
+        })
+        .catch((error) => {
+          res.status(500).send('Error on saving the user once location productivity has been updated!');
+        });
+    })
+    .catch((error) => {
+      res.status(500).send(error);
+    });
+
+  console.log('bump!');
+
+  LocationModel.findOne({ _id: locationID })
+    .then((foundLocation) => {
+      foundLocation.productivity = productivity;
+
+      foundLocation.save()
+        .then((savedfoundLocation) => {
+          console.log(`Successfully set the location document with id ${locationID} to have a productivity of ${productivity}`);
+          res.send(savedfoundLocation);
+        })
+        .catch((error) => {
+          res.status(500).send(`Error upon saving location document with id ${locationID}`);
+        });
+    });
+};
+
+//   foundUser.frequentLocations.findOne({ _id: locationID })
+//     .then((foundLocation) => {
+//       console.log('you found the location!');
+//       res.send(foundLocation);
+//     })
+//     .catch((error) => {
+//       res.status(500).error('Error on finding User or finding location');
+//     });
+// })
+// .catch((error) => {
+//   res.status(500).send(error);
+// });
+
+// foundUser.LocationSchema.findOne({ _id: locationID })
+// .then((foundLocation) => {
+//   console.log('you found the location!');
+//   res.send(foundLocation);
+// })
+// .catch((error) => {
+//   res.status(500).error('Error on finding User or finding location');
+// });
+
+// LocationModel.findOne({ _id: locationID }) // is this the correct way to query for it...? // also, is LocationModel correct...?
+//   .then((foundLocation) => {
+//     foundLocation.productivity = productivity;
+
+//     foundLocation.save()
+//       .then((savedfoundLocation) => {
+//         console.log(`Successfully set the location document with id ${locationID} to have a productivity of ${productivity}`);
+//         res.send(savedfoundLocation);
+//       })
+//       .catch((error) => {
+//         res.status(500).send(`Error upon saving location document with id ${locationID}`);
+//       });
+//   })
+//   .catch((error) => {
+//     res.status(500).send(error);
+//   });
 
 // convert lat longs for each location object of a user from their background location to actual google places
 const setGoogleLocationInfo = (uid) => {
