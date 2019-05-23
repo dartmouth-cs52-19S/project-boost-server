@@ -28,8 +28,15 @@ const createUser = (req, res, next) => {
 
         user.save()
           .then((response) => { // if save is successfull
-            // TODO: don't send the entire object back (will be huge), just send necessary info
-            res.send({ token: tokenForUser(user), response });
+            res.send({
+              token: tokenForUser(user),
+              response: {
+                presetProductiveLocations: response.presetProductiveLocations,
+                settings: response.settings,
+                homeLocation: response.homeLocation,
+                latlongHomeLocation: response.latlongHomeLocation,
+              },
+            });
           })
           .catch((error) => { // if save throws an error
             if (error) {
@@ -37,10 +44,13 @@ const createUser = (req, res, next) => {
             }
           });
       } else { // if founderUser !== null
-        console.log('A user with this firebase userID already exists! Sending the info...');
-
-        // TODO: don't send the entire object back (will be huge), just send necessary info
-        res.send(foundUser);
+        console.log('A user with this firebase uid already exists! Sending the info...');
+        res.send({
+          presetProductiveLocations: foundUser.presetProductiveLocations,
+          settings: foundUser.settings,
+          homeLocation: foundUser.homeLocation,
+          latlongHomeLocation: foundUser.latlongHomeLocation,
+        });
       }
     }) // end of .then
     .catch((err) => {
