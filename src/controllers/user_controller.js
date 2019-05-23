@@ -28,8 +28,15 @@ const createUser = (req, res, next) => {
 
         user.save()
           .then((response) => { // if save is successfull
-            // TODO: don't send the entire object back (will be huge), just send necessary info
-            res.send({ token: tokenForUser(user), response });
+            res.send({
+              token: tokenForUser(user),
+              response: {
+                presetProductiveLocations: response.presetProductiveLocations,
+                settings: response.settings,
+                homeLocation: response.homeLocation,
+                latlongHomeLocation: response.latlongHomeLocation,
+              },
+            });
           })
           .catch((error) => { // if save throws an error
             if (error) {
@@ -37,10 +44,13 @@ const createUser = (req, res, next) => {
             }
           });
       } else { // if founderUser !== null
-        console.log('A user with this firebase userID already exists! Sending the info...');
-
-        // TODO: don't send the entire object back (will be huge), just send necessary info
-        res.send(foundUser);
+        console.log('A user with this firebase uid already exists! Sending the info...');
+        res.send({
+          presetProductiveLocations: foundUser.presetProductiveLocations,
+          settings: foundUser.settings,
+          homeLocation: foundUser.homeLocation,
+          latlongHomeLocation: foundUser.latlongHomeLocation,
+        });
       }
     }) // end of .then
     .catch((err) => {
@@ -61,31 +71,23 @@ export const updateUserSettings = (req, res, next) => {
       const newPresetProductiveLocations = {}; // create a new Object
 
       presetProductiveLocations.forEach((location) => { // loop through all the objects sent from the front-end
-        const address = location.address;
-        newPresetProductiveLocations[address] = location.productivity;
+        newPresetProductiveLocations[location.address] = location.productivity;
       });
 
-      if (Object.keys(newPresetProductiveLocations).length !== 0) {
-        foundUser.presetProductiveLocations = newPresetProductiveLocations;
-      }
+      // add to user's preset productive locations
+      Object.keys(newPresetProductiveLocations).forEach((address) => {
+        foundUser.presetProductiveLocations[address] = newPresetProductiveLocations[address];
+      });
 
       // now, go into all the locations of this user and set strings and productivities respectively
-      const allPresetProductiveLocationAddresses = [];
+      const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
       const promises = [];
-
-      foundUser.presetProductiveLocations.forEach((location) => {
-        allPresetProductiveLocationAddresses.push(Object.keys(location)[0]);
-      });
 
       foundUser.frequentLocations.forEach((locationObj) => {
         promises.push(new Promise((resolve, reject) => {
           if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
             if (!locationObj.productivity) {
-              const prodLocation = presetProductiveLocations.find((element) => {
-                return element.address === locationObj.location.formatted_address;
-              });
-
-              locationObj.productivity = prodLocation.productivity;
+              locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
             }
           }
           resolve();
@@ -239,6 +241,12 @@ const setGoogleLocationInfo = (uid) => {
               if (Object.keys(locationObj).length === 0 && Object.keys(discoveredLocations).contains(locationObj.latLongLocation)) {
                 locationObj.location = discoveredLocations[locationObj.latLongLocation];
               }
+
+              // if this location is also a location the user set as a productive location, set the productivity
+              if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
+                locationObj.productivity = foundUser.presetProductiveLocations[0][locationObj.location.formatted_address];
+              }
+
               resolve();
             }));
           });
