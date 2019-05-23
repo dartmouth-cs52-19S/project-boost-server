@@ -91,7 +91,7 @@ export const updateUserSettings = (req, res, next) => {
         promises.push(new Promise((resolve, reject) => {
           if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
             if (!locationObj.productivity) {
-              locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
+              locationObj.productivity = newPresetProductiveLocations[locationObj.location.formatted_address];
             }
           }
           resolve();
