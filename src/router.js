@@ -38,6 +38,10 @@ router.post('/storeBackgroundData', (req, res, next) => {
   Users.storeBackgroundData(req, res, next);
 });
 
+router.get('/mostProductiveLocationsRanked', (req, res, next) => {
+  Users.getMostProductiveLocationsRanked(req, res, next);
+});
+
 router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {
   const rawdata = fs.readFileSync(req.file.path);
   const rawdataJSON = JSON.parse(rawdata);

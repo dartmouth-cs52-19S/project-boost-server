@@ -6,6 +6,7 @@ import { Map } from 'immutable';
 import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
+import groupBy from '../constants/group_by';
 import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
@@ -567,10 +568,149 @@ const processBackgroundLocationData = (uid) => {
     });
 };
 
+// get the top n most productive locations by average productivity level
+// tie breakers are ranked by number of times the location was observed
+const getMostProductiveLocationsRanked = (req, res, next) => {
+  if (!req.query.uid) {
+    res.status(500).send('You must provide a valid user id');
+  }
+
+  if (!req.query.numberOfItems) {
+    res.status(500).send('You must provide the number of items you would like to receive');
+  }
+
+  User.findOne({ _id: req.query.uid })
+    .then((foundUser) => {
+      const locationMetrics = {};
+      const promises = [];
+
+      let currentAddress = null;
+      let currentSum = 0;
+      let currentCount = 0;
+
+      // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
+      foundUser.frequentLocations.forEach((locationObj) => {
+        promises.push(new Promise((resolve, reject) => {
+          if (currentAddress === null) {
+            currentAddress = locationObj.location.formatted_address;
+            currentSum = locationObj.productivity ? locationObj.productivity : 0;
+            currentCount = 1;
+          }
+          else if (currentAddress !== locationObj.location.formatted_address) {
+            if (locationMetrics[currentAddress]) {
+              locationMetrics[currentAddress] = {
+                timesObserved: locationMetrics[currentAddress].timesObserved + currentCount,
+                sumOfProductivity: locationMetrics[currentAddress].sumOfProductivity + currentSum,
+              };
+            } else {
+              locationMetrics[currentAddress] = {
+                timesObserved: currentCount,
+                sumOfProductivity: currentSum,
+              };
+            }
+
+            currentAddress = null;
+            currentSum = 0;
+            currentCount = 0;
+          }
+          else {
+            currentSum += locationObj.productivity ? locationObj.productivity : 0;
+            currentCount += 1;
+          }
+
+          resolve();
+        }));
+      });
+
+      Promise.all(promises)
+        .then((result) => {
+          const summaryPromises = [];
+
+          // once all metrics have been determined, summarize them into average productivity and times observed
+          Object.keys(locationMetrics).forEach((locationName) => {
+            summaryPromises.push(new Promise((resolve, reject) => {
+              locationMetrics[locationName] = {
+                averageProductivity: locationMetrics[locationName].sumOfProductivity / locationMetrics[locationName].timesObserved,
+                timesObserved: locationMetrics[locationName].timesObserved,
+              };
+              resolve();
+            }));
+          });
+
+          Promise.all(summaryPromises)
+            .then(() => {
+              const locationInfoSummarized = [];
+
+              // create an object with this info
+              Object.keys(locationMetrics).forEach((locationName) => {
+                locationInfoSummarized.push({
+                  address: locationName,
+                  averageProductivity: locationMetrics[locationName].averageProductivity,
+                  timesObserved: locationMetrics[locationName].timesObserved,
+                });
+              });
+
+              // sort objects by averageProductivity
+              locationInfoSummarized.sort((a, b) => {
+                if (a.averageProductivity < b.averageProductivity) {
+                  return 1;
+                }
+                if (a.averageProductivity > b.averageProductivity) {
+                  return -1;
+                }
+                return 0;
+              });
+
+              // grab the top n most productive locations as measured by average productivity
+              const topFive = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
+
+              // break into categories by productivity level
+              const split = groupBy(topFive, 'averageProductivity');
+
+              // for each item at a productivity level, sort by the times it has been observed
+              Object.keys(split).forEach((rank) => {
+                split[rank].sort((a, b) => {
+                  if (a.timesObserved < b.timesObserved) {
+                    return -1;
+                  }
+                  if (a.timesObserved > b.timesObserved) {
+                    return 1;
+                  }
+                  return 0;
+                });
+              });
+
+              const output = [];
+
+              // put the top five observations back together
+              // by sorting the subcollections, we return the top five most productive locations with a tiebreaker being the number of times the location was observed
+              Object.keys(split).forEach((rank) => {
+                split[rank].forEach((location) => {
+                  output.unshift(location);
+                });
+              });
+
+              res.send({ output });
+            })
+            .catch((error) => {
+              res.status(500).send(error);
+            });
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
+    })
+    .catch((error) => {
+      res.status(500).send(`User with id: ${req.query.uid} was not found`);
+    });
+};
+
 // encodes a new token for a user object
 function tokenForUser(user) {
   const timestamp = new Date().getTime();
   return jwt.encode({ sub: user.id, iat: timestamp }, process.env.AUTH_SECRET);
 }
 
-export { createUser, setModelRun, storeBackgroundData };
+export {
+  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked,
+};
