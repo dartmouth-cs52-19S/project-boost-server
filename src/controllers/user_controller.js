@@ -48,6 +48,74 @@ const createUser = (req, res, next) => {
     });
 };
 
+export const updateUserSettings = (req, res, next) => {
+  const {
+    userID, homeLocation, homeLocationLatLong, presetProductiveLocations,
+  } = req.body;
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
+      foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
+
+      const newPresetProductiveLocations = {}; // create a new Object
+
+      presetProductiveLocations.forEach((location) => { // loop through all the objects sent from the front-end
+        const address = location.address;
+        newPresetProductiveLocations[address] = location.productivity;
+      });
+
+      if (Object.keys(newPresetProductiveLocations).length !== 0) {
+        foundUser.presetProductiveLocations = newPresetProductiveLocations;
+      }
+
+      // now, go into all the locations of this user and set strings and productivities respectively
+      const allPresetProductiveLocationAddresses = [];
+      const promises = [];
+
+      foundUser.presetProductiveLocations.forEach((location) => {
+        allPresetProductiveLocationAddresses.push(Object.keys(location)[0]);
+      });
+
+      foundUser.frequentLocations.forEach((locationObj) => {
+        promises.push(new Promise((resolve, reject) => {
+          if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
+            if (!locationObj.productivity) {
+              const prodLocation = presetProductiveLocations.find((element) => {
+                return element.address === locationObj.location.formatted_address;
+              });
+
+              locationObj.productivity = prodLocation.productivity;
+            }
+          }
+          resolve();
+        }));
+      });
+
+      Promise.all(promises)
+        .then((results) => {
+          // end result should be foundUser.presetProductiveLocations = [ {"9 Maynard Street, Hanover, NH": 5}, {"Dartmouth Street, Boston, MA,USA: 3} ]
+          foundUser.save()
+            .then((response) => {
+              res.send({ message: `Success saving user settings for user with id ${userID}` });
+            })
+            .catch((err) => {
+              if (err) {
+                res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
+              }
+            });
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
+    })
+    .catch((error) => {
+      if (error) {
+        res.status(500).send(`Error upon saving user settings for user with id ${userID}. Could not find user.`);
+      }
+    });
+};
+
 // convert lat longs for each location object of a user from their background location to actual google places
 const setGoogleLocationInfo = (uid) => {
   User.findOne({ _id: uid })
@@ -486,8 +554,6 @@ const processBackgroundLocationData = (uid) => {
       console.error(error.message);
     });
 };
-
-processBackgroundLocationData('vSBrHUpwFZPqGIisDcBPS6cuLTx1');
 
 // encodes a new token for a user object
 function tokenForUser(user) {
