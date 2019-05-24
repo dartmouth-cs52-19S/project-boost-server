@@ -120,7 +120,7 @@ export const updateUserSettings = (req, res, next) => {
 };
 
 export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) => {
-  const { userID, days } = req.body;
+  const { userID, days } = req.query;
 
   // const days = 14; // last 14 days . if days = 7, find all locations w. productivity == null in last 7 days
 
@@ -128,13 +128,13 @@ export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) 
     { $match: { _id: userID } },
     { $project: { frequentLocations: 1, _id: 0 } }])
     .then((foundLocations, error) => {
-      const foundLocations1 = foundLocations[0].frequentLocations;
-      const timeStampOfExactlyOneWeekAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
-      const onlyFilteredLocationObjs = foundLocations1.filter((locationObj) => {
-        return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyOneWeekAgo;
+      const FrequentLocations = foundLocations[0].frequentLocations;
+      const timeStampOfExactlyNDaysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
+      const onlyFilteredLocationObjs = FrequentLocations.filter((locationObj) => {
+        return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyNDaysAgo;
       });
 
-      console.log(timeStampOfExactlyOneWeekAgo);
+      console.log(timeStampOfExactlyNDaysAgo);
 
       console.log(onlyFilteredLocationObjs.length);
 
@@ -202,9 +202,9 @@ function dayOfWeekAsString(dayIndex) {
 }
 
 export const getMostProductiveWeekDay = (req, res, next) => {
-  const { userID } = req.body;
+  const { userID } = req.query;
 
-  // const userID = req.body.userID;
+  // const userID = req.query.userID;
 
   const Sunday = [];
   const Monday = [];
