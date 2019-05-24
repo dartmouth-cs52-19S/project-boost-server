@@ -31,6 +31,8 @@ const createUser = (req, res, next) => {
         user.initialUploadData = initialUploadData;
         user.presetProductiveLocations = {};
         user.settings = {};
+        user.mostProductiveWeekDay = '';
+        user.leastProductiveWeekDay = '';
         user.homeLocation = '';
         user.latlongHomeLocation = '';
         user.backgroundLocationDataToBeProcessed = [];
@@ -159,23 +161,18 @@ export const updateProductivityLevel = (req, res, next) => {
   const { userID, productivity } = req.body;
   const { locationID } = req.params;
 
-  console.log('you hit the route!');
-
   User.findOne({ _id: userID }, { frequentLocations: 1 })
     .then((foundUser) => {
-      console.log('you found the user!');
-
       const foundLocationObj = foundUser.frequentLocations.id(locationID);
       foundLocationObj.productivity = productivity;
 
       console.log(foundLocationObj);
       // res.send(foundLocationObj);
 
-      console.log('yay!');
-
       foundUser.save()
         .then((updatedUserandLocationObj) => {
           console.log('Successfully saved!');
+          res.send({ message: 'Successfully saved!' });
         })
         .catch((error) => {
           res.status(500).send('Error on saving the user once location productivity has been updated!');
@@ -184,8 +181,6 @@ export const updateProductivityLevel = (req, res, next) => {
     .catch((error) => {
       res.status(500).send(error);
     });
-
-  console.log('bump!');
 
   LocationModel.findOne({ _id: locationID })
     .then((foundLocation) => {
@@ -378,6 +373,55 @@ export const getMostProductiveWeekDay = (req, res, next) => {
       highestAvgProductivity,
       mostProductivityWeekDay,
       mostProductivityWeekDayString,
+    });
+  });
+};
+
+export const getLeastProductiveWeekDay = (req, res, next) => {
+  // function which calculates the average productivity of each day of the week
+  getWeekDayProductivityAverages(req.query.userID).then((weekDayProductivityAverages) => {
+    const avgProductivityofSunday = weekDayProductivityAverages[0];
+    const avgProductivityofMonday = weekDayProductivityAverages[1];
+    const avgProductivityofTuesday = weekDayProductivityAverages[2];
+    const avgProductivityofWednesday = weekDayProductivityAverages[3];
+    const avgProductivityofThursday = weekDayProductivityAverages[4];
+    const avgProductivityofFriday = weekDayProductivityAverages[5];
+    const avgProductivityofSaturday = weekDayProductivityAverages[6];
+
+    const lowestAvgProductivity = Math.min(avgProductivityofSunday, avgProductivityofMonday, avgProductivityofTuesday, avgProductivityofWednesday, avgProductivityofThursday, avgProductivityofFriday, avgProductivityofSaturday);
+
+    let leastProductivityWeekDay = 6;
+
+    switch (lowestAvgProductivity)
+    {
+      case (avgProductivityofSunday):
+        leastProductivityWeekDay = 0;
+        break;
+      case (avgProductivityofMonday):
+        leastProductivityWeekDay = 1;
+        break;
+      case (avgProductivityofTuesday):
+        leastProductivityWeekDay = 2;
+        break;
+      case (avgProductivityofWednesday):
+        leastProductivityWeekDay = 3;
+        break;
+      case (avgProductivityofThursday):
+        leastProductivityWeekDay = 4;
+        break;
+      case (avgProductivityofFriday):
+        leastProductivityWeekDay = 5;
+        break;
+      default:
+        leastProductivityWeekDay = 6;
+    }
+
+    const leastProductivityWeekDayString = dayOfWeekAsString(leastProductivityWeekDay);
+
+    res.send({
+      lowestAvgProductivity,
+      leastProductivityWeekDay,
+      leastProductivityWeekDayString,
     });
   });
 };
