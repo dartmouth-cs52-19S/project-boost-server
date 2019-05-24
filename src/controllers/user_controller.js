@@ -132,158 +132,184 @@ export const updateUserSettings = (req, res, next) => {
 
 // convert lat longs for each location object of a user from their background location to actual google places
 const setGoogleLocationInfo = (uid) => {
-  User.findOne({ _id: uid })
-    .then((foundUser) => {
-      if (foundUser === null) {
-        console.error(`Didn't find user with id: ${uid}`);
-      } else {
-        const promises = [];
-        const locationsObserved = [];
-        const discoveredLocations = {};
-        let times = 0;
+  return new Promise((resolve, reject) => {
+    User.findOne({ _id: uid })
+      .then((foundUser) => {
+        if (foundUser === null) {
+          console.error(`Didn't find user with id: ${uid}`);
+        } else {
+          const promises = [];
+          const locationsObserved = [];
+          const discoveredLocations = {};
+          let times = 0;
 
-        // grab location info for each location
-        foundUser.frequentLocations.forEach((locationObj) => {
-          promises.push(new Promise((resolve, reject) => {
+          // grab location info for each location
+          foundUser.frequentLocations.forEach((locationObj) => {
+            promises.push(new Promise((resolve, reject) => {
             // ensure we don't already have info on this location
-            if (Object.keys(locationObj.location).length === 0) {
+              if (locationObj.location === undefined || Object.keys(locationObj.location).length === 0) {
               // if we haven't come across this location already, either check other location objects or the google api for more info
-              if (!locationsObserved.includes(locationObj.latLongLocation)) {
+                if (!locationsObserved.includes(locationObj.latLongLocation)) {
                 // mark that we will soon know more about this location, so other location objects here can wait to get the information
-                locationsObserved.push(locationObj.latLongLocation);
+                  locationsObserved.push(locationObj.latLongLocation);
 
-                // check if any pre-existing location in our model knows about this location
-                LocationModel.find({ latLongLocation: locationObj.latLongLocation })
-                  .then((foundLocations) => {
+                  // check if any pre-existing location in our model knows about this location
+                  LocationModel.find({ latLongLocation: locationObj.latLongLocation })
+                    .then((foundLocations) => {
                     // ensure we got data
-                    if (foundLocations.length > 0) {
-                      let foundInfo = false;
+                      if (foundLocations.length > 0) {
+                        let foundInfo = false;
 
-                      const foundPromises = [];
+                        const foundPromises = [];
 
-                      // check each location object
-                      foundLocations.forEach((foundLocation) => {
-                        foundPromises.push(new Promise((resolve, reject) => {
-                          if (foundLocation !== null) {
+                        // check each location object
+                        foundLocations.forEach((foundLocation) => {
+                          foundPromises.push(new Promise((resolve, reject) => {
+                            if (foundLocation !== null) {
                             // make sure this location object has google data in it
-                            if (foundLocation.location !== null && foundLocation.location !== undefined) {
-                              if (Object.keys(foundLocation.location).length > 0) {
+                              if (foundLocation.location !== null && foundLocation.location !== undefined) {
+                                if (Object.keys(foundLocation.location).length > 0) {
                                 // store result in object
-                                locationObj.location = foundLocation.location;
+                                  locationObj.location = foundLocation.location;
 
-                                // cache the result to grab after the promises resolve
-                                discoveredLocations[locationObj.latLongLocation] = foundLocation.location;
-                                foundInfo = true;
+                                  // cache the result to grab after the promises resolve
+                                  discoveredLocations[locationObj.latLongLocation] = foundLocation.location;
+                                  foundInfo = true;
+                                  resolve(locationObj);
+                                }
+                              } else {
+                                foundLocation.location = {};
                                 resolve(locationObj);
                               }
-                            } else {
-                              foundLocation.location = {};
-                              resolve(locationObj);
                             }
-                          }
-                        }));
-                      });
-
-                      Promise.all(foundPromises)
-                        .then((results) => {
-                          // if none of these objects had info on this location, make a call to the google api
-                          if (!foundInfo) {
-                            times += 1;
-                            // make a call to google api to get info
-                            getLocationInfo(locationObj.latLongLocation)
-                              .then((result) => {
-                                locationObj.location = result;
-
-                                // cache the result to grab after the promises resolve
-                                discoveredLocations[locationObj.latLongLocation] = result;
-                                resolve(locationObj);
-                              })
-                              .catch((error) => {
-                                resolve();
-                              });
-                          }
-                        })
-                        .catch((error) => {
-                          locationObj.location = {};
-                          resolve(locationObj);
+                          }));
                         });
+
+                        Promise.all(foundPromises)
+                          .then((results) => {
+                          // if none of these objects had info on this location, make a call to the google api
+                            if (!foundInfo) {
+                              times += 1;
+                              // make a call to google api to get info
+                              getLocationInfo(locationObj.latLongLocation)
+                                .then((result) => {
+                                  locationObj.location = result;
+
+                                  // cache the result to grab after the promises resolve
+                                  discoveredLocations[locationObj.latLongLocation] = result;
+                                  resolve(locationObj);
+                                })
+                                .catch((error) => {
+                                  resolve();
+                                });
+                            }
+                          })
+                          .catch((error) => {
+                            locationObj.location = {};
+                            resolve(locationObj);
+                          });
 
                       // if not, make a call to the google api
-                    } else {
-                      times += 1;
-                      // make a call to google api to get info
-                      getLocationInfo(locationObj.latLongLocation)
-                        .then((result) => {
-                          locationObj.location = result;
+                      } else {
+                        times += 1;
+                        // make a call to google api to get info
+                        getLocationInfo(locationObj.latLongLocation)
+                          .then((result) => {
+                            locationObj.location = result;
 
-                          // cache the result to grab after the promises resolve
-                          discoveredLocations[locationObj.latLongLocation] = result;
-                          resolve(locationObj);
-                        })
-                        .catch((error) => {
-                          resolve();
-                        });
-                    }
-                  })
-                  .catch((error) => {
-                    console.error(error);
-                  });
-              }
+                            // cache the result to grab after the promises resolve
+                            discoveredLocations[locationObj.latLongLocation] = result;
+                            resolve(locationObj);
+                          })
+                          .catch((error) => {
+                            resolve();
+                          });
+                      }
+                    })
+                    .catch((error) => {
+                      console.error(error);
+                    });
+                }
 
-              // if we have come across this lat long before, we won't have gotten the google data in time because it's an async call
-              // so, just mark that we know we need to fill this in
-              else {
-                locationObj.location = {};
+                // if we have come across this lat long before, we won't have gotten the google data in time because it's an async call
+                // so, just mark that we know we need to fill this in
+                else {
+                  locationObj.location = {};
+                  resolve(locationObj);
+                }
+              } else {
                 resolve(locationObj);
               }
-            } else {
-              resolve(locationObj);
-            }
-          }));
-        });
-
-        // when all location objects have been searched by google or stored, check for the ones we passed on
-        Promise.all(promises).then(() => {
-          const confirmPromises = [];
-
-          // loop over each location and object and check if we passed on making an API call but had to wait to access the data
-          foundUser.frequentLocations.forEach((locationObj) => {
-            confirmPromises.push(new Promise((resolve, reject) => {
-              // if this location has an empty location field and we know we stored it's google info, set it
-              if (Object.keys(locationObj).length === 0 && Object.keys(discoveredLocations).contains(locationObj.latLongLocation)) {
-                locationObj.location = discoveredLocations[locationObj.latLongLocation];
-              }
-
-              // if this location is also a location the user set as a productive location, set the productivity
-              if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
-                locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
-              }
-
-              resolve();
             }));
           });
 
-          // once we've gotten all location points, save the user and return
-          Promise.all(confirmPromises)
-            .then(() => {
-              foundUser.save()
-                .then((result) => {
-                  console.log('DONE');
-                  console.log(times);
-                })
-                .catch((error) => {
-                  console.error(error);
-                });
-            })
-            .catch((error) => {
-              console.log(error);
+          // when all location objects have been searched by google or stored, check for the ones we passed on
+          Promise.all(promises).then(() => {
+            const confirmPromises = [];
+
+            // loop over each location and object and check if we passed on making an API call but had to wait to access the data
+            foundUser.frequentLocations.forEach((locationObj) => {
+              confirmPromises.push(new Promise((resolve, reject) => {
+              // if this location has an empty location field and we know we stored it's google info, set it
+                if (Object.keys(locationObj).length === 0 && Object.keys(discoveredLocations).contains(locationObj.latLongLocation)) {
+                  locationObj.location = discoveredLocations[locationObj.latLongLocation];
+                }
+
+                // if this location is also a location the user set as a productive location, set the productivity
+                if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
+                  locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
+                }
+
+                resolve();
+              }));
             });
-        });
-      }
-    }) // end of .then
-    .catch((err) => {
-      console.error(err);
-    });
+
+            // once we've gotten all location points, save the user and return
+            Promise.all(confirmPromises)
+              .then(() => {
+                foundUser.save()
+                  .then((result) => {
+                    console.log('DONE');
+                    console.log(times);
+
+                    // run check of frequent locations to determine if there are any productivity levels we can set
+                    // now, go into all the locations of this user and set strings and productivities respectively
+                    const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
+                    const productivityPromises = [];
+
+                    foundUser.frequentLocations.forEach((locationObj) => {
+                      productivityPromises.push(new Promise((resolve, reject) => {
+                        if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
+                          if (!locationObj.productivity) {
+                            locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
+                          }
+                        }
+                        resolve();
+                      }));
+                    });
+
+                    Promise.all(productivityPromises)
+                      .then(() => {
+                        resolve();
+                      })
+                      .catch((error) => {
+                        reject(error);
+                      });
+                  })
+                  .catch((error) => {
+                    reject(error);
+                  });
+              })
+              .catch((error) => {
+                reject(error);
+              });
+          });
+        }
+      }) // end of .then
+      .catch((err) => {
+        reject(err);
+      });
+  });
 };
 
 const setModelRun = (req, res, modelOutput) => {
@@ -331,8 +357,20 @@ const setModelRun = (req, res, modelOutput) => {
           foundUser.frequentLocations = output;
           foundUser.save().then(() => {
             // grab location details from google api -- run in background and confirm success to user
-            setGoogleLocationInfo(req.body.uid);
-            res.send({ message: 'success!' });
+            // run twice to ensure async gets all
+            setGoogleLocationInfo(req.body.uid)
+              .then(() => {
+                setGoogleLocationInfo(req.body.uid)
+                  .then(() => {
+                    res.send({ message: 'success!' });
+                  })
+                  .catch((err) => {
+                    res.status(500).send(err);
+                  });
+              })
+              .catch((err) => {
+                res.status(500).send(err);
+              });
           }).catch((err) => {
             res.status(500).send(err);
           });
