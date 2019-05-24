@@ -718,7 +718,7 @@ const getMostFrequentlyVisitedLocationsRanked = (req, res, next) => {
             }
             else if (currentAddress !== locationObj.location.formatted_address) {
               if (locationMetrics[currentAddress]) {
-                locationMetrics[currentAddress] = locationMetrics[currentAddress].timesObserved + currentCount;
+                locationMetrics[currentAddress] += currentCount;
               } else {
                 locationMetrics[currentAddress] = currentCount;
               }
