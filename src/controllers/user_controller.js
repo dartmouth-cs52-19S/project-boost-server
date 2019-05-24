@@ -134,7 +134,7 @@ export const updateUserSettings = (req, res, next) => {
 };
 
 export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) => {
-  const { userID, days } = req.body;
+  const { userID, days } = req.query;
 
   // const days = 14; // last 14 days . if days = 7, find all locations w. productivity == null in last 7 days
 
@@ -142,18 +142,13 @@ export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) 
     { $match: { _id: userID } },
     { $project: { frequentLocations: 1, _id: 0 } }])
     .then((foundLocations, error) => {
-      const foundLocations1 = foundLocations[0].frequentLocations;
-      const timeStampOfExactlyOneWeekAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
-      const onlyFilteredLocationObjs = foundLocations1.filter((locationObj) => {
-        return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyOneWeekAgo;
+      const FrequentLocations = foundLocations[0].frequentLocations;
+      const timeStampOfExactlyNDaysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
+      const onlyFilteredLocationObjs = FrequentLocations.filter((locationObj) => {
+        return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyNDaysAgo;
       });
 
-      console.log(timeStampOfExactlyOneWeekAgo);
-
-      console.log(onlyFilteredLocationObjs.length);
-
       res.send(onlyFilteredLocationObjs);
-      // res.send(foundLocations[0].frequentLocations);
     })
     .catch((error) => {
       res.status(500).send(error);
@@ -215,11 +210,8 @@ function dayOfWeekAsString(dayIndex) {
   return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
 }
 
-export const getMostProductiveWeekDay = (req, res, next) => {
-  const { userID } = req.body;
-
-  // const userID = req.body.userID;
-
+export const getWeekDayProductivityAverages = (userID) => {
+  // Loop through the JSON File and insert the corresponding productivities to the weekday arrays.
   const Sunday = [];
   const Monday = [];
   const Tuesday = [];
@@ -228,7 +220,8 @@ export const getMostProductiveWeekDay = (req, res, next) => {
   const Friday = [];
   const Saturday = [];
 
-  User.findOne({ _id: userID })
+  // if the user exists
+  return User.findOne({ _id: userID })
     .then((foundUser) => {
       foundUser.frequentLocations.forEach((locationObj) => {
         const EpochOfSingularLocationObj = locationObj.startTime;
@@ -240,107 +233,153 @@ export const getMostProductiveWeekDay = (req, res, next) => {
           switch (dayOfWeek)
           {
             case '0':
-            // console.log('Sunday');
               Sunday.push(Number(ProductivityOfSingularLocationObj));
               break;
             case '1':
-            // console.log('Monday');
               Monday.push(Number(ProductivityOfSingularLocationObj));
               break;
             case '2':
-            // console.log('Tuesday');
               Tuesday.push(Number(ProductivityOfSingularLocationObj));
               break;
             case '3':
-            // console.log('Wednesday');
               Wednesday.push(Number(ProductivityOfSingularLocationObj));
               break;
             case '4':
-            // console.log('Thursday');
               Thursday.push(Number(ProductivityOfSingularLocationObj));
               break;
             case '5':
-            // console.log('Friday');
               Friday.push(Number(ProductivityOfSingularLocationObj));
               break;
             default:
-            // console.log('Saturday');
               Saturday.push(Number(ProductivityOfSingularLocationObj));
           }
         }
       });
 
-      // CHECK IF ANY OF SUNDAY, MONDAY, TUESDAY, WEDNESDAY ... ETC . , IS NULL
+      const sumOfSunday = Sunday.reduce(getSum, 0);
+      const sumOfMonday = Monday.reduce(getSum, 0);
+      const sumOfTuesday = Tuesday.reduce(getSum, 0);
+      const sumOfWednesday = Wednesday.reduce(getSum, 0);
+      const sumOfThursday = Thursday.reduce(getSum, 0);
+      const sumOfFriday = Friday.reduce(getSum, 0);
+      const sumOfSaturday = Saturday.reduce(getSum, 0);
 
-      const sumOfSunday = Sunday.reduce(getSum);
-      const sumOfMonday = Monday.reduce(getSum);
-      const sumOfTuesday = Tuesday.reduce(getSum);
-      const sumOfWednesday = Wednesday.reduce(getSum);
-      const sumOfThursday = Thursday.reduce(getSum);
-      const sumOfFriday = Friday.reduce(getSum);
-      const sumOfSaturday = Saturday.reduce(getSum);
 
-      const avgProductivityofSunday = (sumOfSunday / Sunday.length);
-      const avgProductivityofMonday = (sumOfMonday / Monday.length);
-      const avgProductivityofTuesday = (sumOfTuesday / Tuesday.length);
-      const avgProductivityofWednesday = (sumOfWednesday / Wednesday.length);
-      const avgProductivityofThursday = (sumOfThursday / Thursday.length);
-      const avgProductivityofFriday = (sumOfFriday / Friday.length);
-      const avgProductivityofSaturday = (sumOfSaturday / Saturday.length);
+      // Lengths of Arrays
+      let SundayArrayLength;
+      let MondayArrayLength;
+      let TuesdayArrayLength;
+      let WednesdayArrayLength;
+      let ThursdayArrayLength;
+      let FridayArrayLength;
+      let SaturdayArrayLength;
 
-      console.log(avgProductivityofSunday);
-      console.log(avgProductivityofMonday);
-      console.log(avgProductivityofTuesday);
-      console.log(avgProductivityofWednesday);
-      console.log(avgProductivityofThursday);
-      console.log(avgProductivityofFriday);
-      console.log(avgProductivityofSaturday);
 
-      const highestAvgProductivity = Math.max(avgProductivityofSunday, avgProductivityofMonday, avgProductivityofTuesday, avgProductivityofWednesday, avgProductivityofThursday, avgProductivityofFriday, avgProductivityofSaturday);
+      // Check if any of the arrays are empty, then find average
 
-      console.log('The highest avg Productivity is: ');
-      console.log(highestAvgProductivity);
-
-      let mostProductivityWeekDay = 6;
-
-      switch (highestAvgProductivity)
-      {
-        case (avgProductivityofSunday):
-          mostProductivityWeekDay = 0;
-          break;
-        case (avgProductivityofMonday):
-          mostProductivityWeekDay = 1;
-          break;
-        case (avgProductivityofTuesday):
-          mostProductivityWeekDay = 2;
-          break;
-        case (avgProductivityofWednesday):
-          mostProductivityWeekDay = 3;
-          break;
-        case (avgProductivityofThursday):
-          mostProductivityWeekDay = 4;
-          break;
-        case (avgProductivityofFriday):
-          mostProductivityWeekDay = 5;
-          break;
-        default:
-          mostProductivityWeekDay = 6;
+      // if the length is 0, return 1 so we can at least divide
+      if (Sunday.length === 0) {
+        SundayArrayLength = 1;
+      } else {
+        SundayArrayLength = Sunday.length;
       }
 
-      console.log('Your most productive weekDay is: ');
-      console.log(mostProductivityWeekDay);
+      if (Monday.length === 0) {
+        MondayArrayLength = 1;
+      } else {
+        MondayArrayLength = Monday.length;
+      }
 
-      const mostProductivityWeekDayString = dayOfWeekAsString(mostProductivityWeekDay);
+      if (Tuesday.length === 0) {
+        TuesdayArrayLength = 1;
+      } else {
+        TuesdayArrayLength = Tuesday.length;
+      }
 
-      // const mostProductivityWeekDayString = moment('5').format('dddd');
+      if (Wednesday.length === 0) {
+        WednesdayArrayLength = 1;
+      } else {
+        WednesdayArrayLength = Wednesday.length;
+      }
 
-      console.log(mostProductivityWeekDayString);
+      if (Thursday.length === 0) {
+        ThursdayArrayLength = 1;
+      } else {
+        ThursdayArrayLength = Thursday.length;
+      }
 
-      res.send({ message: 'success!' });
-    })
-    .catch((error) => {
-      res.status(500).send(error);
+      if (Friday.length === 0) {
+        FridayArrayLength = 1;
+      } else {
+        FridayArrayLength = Friday.length;
+      }
+
+      if (Saturday.length === 0) {
+        SaturdayArrayLength = 1;
+      } else {
+        SaturdayArrayLength = Saturday.length;
+      }
+
+      // Calculate Average Productivities
+      const avgProductivityofSunday = (sumOfSunday / SundayArrayLength);
+      const avgProductivityofMonday = (sumOfMonday / MondayArrayLength);
+      const avgProductivityofTuesday = (sumOfTuesday / TuesdayArrayLength);
+      const avgProductivityofWednesday = (sumOfWednesday / WednesdayArrayLength);
+      const avgProductivityofThursday = (sumOfThursday / ThursdayArrayLength);
+      const avgProductivityofFriday = (sumOfFriday / FridayArrayLength);
+      const avgProductivityofSaturday = (sumOfSaturday / SaturdayArrayLength);
+
+      return [avgProductivityofSunday, avgProductivityofMonday, avgProductivityofTuesday, avgProductivityofWednesday, avgProductivityofThursday, avgProductivityofFriday, avgProductivityofSaturday];
     });
+};
+
+export const getMostProductiveWeekDay = (req, res, next) => {
+  // function which calculates the average productivity of each day of the week
+  getWeekDayProductivityAverages(req.query.userID).then((weekDayProductivityAverages) => {
+    const avgProductivityofSunday = weekDayProductivityAverages[0];
+    const avgProductivityofMonday = weekDayProductivityAverages[1];
+    const avgProductivityofTuesday = weekDayProductivityAverages[2];
+    const avgProductivityofWednesday = weekDayProductivityAverages[3];
+    const avgProductivityofThursday = weekDayProductivityAverages[4];
+    const avgProductivityofFriday = weekDayProductivityAverages[5];
+    const avgProductivityofSaturday = weekDayProductivityAverages[6];
+
+    const highestAvgProductivity = Math.max(avgProductivityofSunday, avgProductivityofMonday, avgProductivityofTuesday, avgProductivityofWednesday, avgProductivityofThursday, avgProductivityofFriday, avgProductivityofSaturday);
+
+    let mostProductivityWeekDay = 6;
+
+    switch (highestAvgProductivity)
+    {
+      case (avgProductivityofSunday):
+        mostProductivityWeekDay = 0;
+        break;
+      case (avgProductivityofMonday):
+        mostProductivityWeekDay = 1;
+        break;
+      case (avgProductivityofTuesday):
+        mostProductivityWeekDay = 2;
+        break;
+      case (avgProductivityofWednesday):
+        mostProductivityWeekDay = 3;
+        break;
+      case (avgProductivityofThursday):
+        mostProductivityWeekDay = 4;
+        break;
+      case (avgProductivityofFriday):
+        mostProductivityWeekDay = 5;
+        break;
+      default:
+        mostProductivityWeekDay = 6;
+    }
+
+    const mostProductivityWeekDayString = dayOfWeekAsString(mostProductivityWeekDay);
+
+    res.send({
+      highestAvgProductivity,
+      mostProductivityWeekDay,
+      mostProductivityWeekDayString,
+    });
+  });
 };
 
 // convert lat longs for each location object of a user from their background location to actual google places
