@@ -11,6 +11,8 @@ import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
 
+const moment = require('moment');
+
 // create user object for this id if one doesn't exist already
 const createUser = (req, res, next) => {
   const { userID, initialUploadData } = req.body; // userID obtained from firebase sign in w. Google
@@ -243,6 +245,213 @@ export const updateProductivityLevel = (req, res, next) => {
 //   .catch((error) => {
 //     res.status(500).send(error);
 //   });
+
+const getSum = (total, num) => {
+  return total + num;
+};
+
+function dayOfWeekAsString(dayIndex) {
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
+}
+
+export const getMostProductiveWeekDay = (req, res, next) => {
+  const { userID } = req.body;
+
+  // const userID = req.body.userID;
+
+  const Sunday = [];
+  const Monday = [];
+  const Tuesday = [];
+  const Wednesday = [];
+  const Thursday = [];
+  const Friday = [];
+  const Saturday = [];
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      foundUser.frequentLocations.forEach((locationObj) => {
+        const EpochOfSingularLocationObj = locationObj.startTime;
+        const ProductivityOfSingularLocationObj = locationObj.productivity;
+
+        if (ProductivityOfSingularLocationObj) {
+          const dayOfWeek = moment(EpochOfSingularLocationObj).format('d'); // dayOfWeek is a string
+
+          switch (dayOfWeek)
+          {
+            case '0':
+            // console.log('Sunday');
+              Sunday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '1':
+            // console.log('Monday');
+              Monday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '2':
+            // console.log('Tuesday');
+              Tuesday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '3':
+            // console.log('Wednesday');
+              Wednesday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '4':
+            // console.log('Thursday');
+              Thursday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '5':
+            // console.log('Friday');
+              Friday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            default:
+            // console.log('Saturday');
+              Saturday.push(Number(ProductivityOfSingularLocationObj));
+          }
+        }
+      });
+
+      // CHECK IF ANY OF SUNDAY, MONDAY, TUESDAY, WEDNESDAY ... ETC . , IS NULL
+
+      const sumOfSunday = Sunday.reduce(getSum);
+      const sumOfMonday = Monday.reduce(getSum);
+      const sumOfTuesday = Tuesday.reduce(getSum);
+      const sumOfWednesday = Wednesday.reduce(getSum);
+      const sumOfThursday = Thursday.reduce(getSum);
+      const sumOfFriday = Friday.reduce(getSum);
+      const sumOfSaturday = Saturday.reduce(getSum);
+
+      const avgProductivityofSunday = (sumOfSunday / Sunday.length);
+      const avgProductivityofMonday = (sumOfMonday / Monday.length);
+      const avgProductivityofTuesday = (sumOfTuesday / Tuesday.length);
+      const avgProductivityofWednesday = (sumOfWednesday / Wednesday.length);
+      const avgProductivityofThursday = (sumOfThursday / Thursday.length);
+      const avgProductivityofFriday = (sumOfFriday / Friday.length);
+      const avgProductivityofSaturday = (sumOfSaturday / Saturday.length);
+
+      console.log(avgProductivityofSunday);
+      console.log(avgProductivityofMonday);
+      console.log(avgProductivityofTuesday);
+      console.log(avgProductivityofWednesday);
+      console.log(avgProductivityofThursday);
+      console.log(avgProductivityofFriday);
+      console.log(avgProductivityofSaturday);
+
+      const highestAvgProductivity = Math.max(avgProductivityofSunday, avgProductivityofMonday, avgProductivityofTuesday, avgProductivityofWednesday, avgProductivityofThursday, avgProductivityofFriday, avgProductivityofSaturday);
+
+      console.log('The highest avg Productivity is: ');
+      console.log(highestAvgProductivity);
+
+      let mostProductivityWeekDay = 6;
+
+      switch (highestAvgProductivity)
+      {
+        case (avgProductivityofSunday):
+          mostProductivityWeekDay = 0;
+          break;
+        case (avgProductivityofMonday):
+          mostProductivityWeekDay = 1;
+          break;
+        case (avgProductivityofTuesday):
+          mostProductivityWeekDay = 2;
+          break;
+        case (avgProductivityofWednesday):
+          mostProductivityWeekDay = 3;
+          break;
+        case (avgProductivityofThursday):
+          mostProductivityWeekDay = 4;
+          break;
+        case (avgProductivityofFriday):
+          mostProductivityWeekDay = 5;
+          break;
+        default:
+          mostProductivityWeekDay = 6;
+      }
+
+      console.log('Your most productive weekDay is: ');
+      console.log(mostProductivityWeekDay);
+
+      const mostProductivityWeekDayString = dayOfWeekAsString(mostProductivityWeekDay);
+
+      // const mostProductivityWeekDayString = moment('5').format('dddd');
+
+      console.log(mostProductivityWeekDayString);
+
+      // console.log('The length of your Sunday [] is: ');
+      // console.log(Sunday.length);
+
+      // console.log('The length of your Monday [] is: ');
+      // console.log(Monday.length);
+
+      // console.log('The length of your Tuesday [] is: ');
+      // console.log(Tuesday.length);
+
+      // console.log('The length of your Wednesday [] is: ');
+      // console.log(Wednesday.length);
+
+      // console.log('The length of your Thursday [] is: ');
+      // console.log(Thursday.length);
+
+      // console.log('The length of your Friday [] is: ');
+      // console.log(Friday.length);
+
+      // console.log('The length of your Saturday [] is: ');
+      // console.log(Saturday.length);
+
+      // console.log(foundUser.frequentLocations[0].startTime);
+
+      // const EpochOfSingularLocation = foundUser.frequentLocations[0].startTime;
+      // const ProductivityOfSingularLocation = foundUser.frequentLocations[0].productivity;
+
+      // console.log('The productivity of your singular locationObj is: ');
+      // console.log(ProductivityOfSingularLocation);
+
+      // const dayOfWeek = moment(EpochOfSingularLocation).format('d'); // dayOfWeek is a string
+
+
+      // switch (dayOfWeek)
+      // {
+      //   case '0':
+      //     console.log('Sunday');
+      //     Sunday.push(ProductivityOfSingularLocation);
+      //     break;
+      //   case '1':
+      //     console.log('Monday');
+      //     Monday.push(ProductivityOfSingularLocation);
+      //     break;
+      //   case '2':
+      //     console.log('Tuesday');
+      //     Tuesday.push(ProductivityOfSingularLocation);
+      //     break;
+      //   case '3':
+      //     console.log('Wednesday');
+      //     Wednesday.push(ProductivityOfSingularLocation);
+      //     break;
+      //   case '4':
+      //     console.log('Thursday');
+      //     Thursday.push(ProductivityOfSingularLocation);
+      //     break;
+      //   case '5':
+      //     console.log('Friday');
+      //     Friday.push(ProductivityOfSingularLocation);
+      //     break;
+      //   default:
+      //     console.log('Saturday');
+      //     Saturday.push(ProductivityOfSingularLocation);
+      // }
+
+      // console.log('Your formatted timestamp day of week is: ');
+      // console.log(dayOfWeek);
+
+      // console.log('The length of your Monday [] is: ');
+      // console.log(Monday.length);
+
+      // res.send({ EpochOfSingularLocation });
+
+      res.send({ message: 'success!' });
+    })
+    .catch((error) => {
+      res.status(500).send(error);
+    });
+};
 
 // convert lat longs for each location object of a user from their background location to actual google places
 const setGoogleLocationInfo = (uid) => {
