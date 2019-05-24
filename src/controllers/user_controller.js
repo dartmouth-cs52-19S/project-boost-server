@@ -6,7 +6,7 @@ import { Map } from 'immutable';
 import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
-import groupBy from '../constants/group_by';
+import { groupBy, splitByAvgProductivity } from '../constants/group_by';
 import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
@@ -673,31 +673,8 @@ const getMostProductiveLocationsRanked = (req, res, next) => {
               // grab the top n most productive locations as measured by average productivity
               const topFive = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
 
-              // break into categories by productivity level
-              const split = groupBy(topFive, 'averageProductivity');
-
-              // for each item at a productivity level, sort by the times it has been observed
-              Object.keys(split).forEach((rank) => {
-                split[rank].sort((a, b) => {
-                  if (a.timesObserved < b.timesObserved) {
-                    return -1;
-                  }
-                  if (a.timesObserved > b.timesObserved) {
-                    return 1;
-                  }
-                  return 0;
-                });
-              });
-
-              const output = [];
-
-              // put the top five observations back together
-              // by sorting the subcollections, we return the top five most productive locations with a tiebreaker being the number of times the location was observed
-              Object.keys(split).forEach((rank) => {
-                split[rank].forEach((location) => {
-                  output.unshift(location);
-                });
-              });
+              // break into categories by productivity level, then sort pieces and combine
+              const output = splitByAvgProductivity(topFive);
 
               res.send({ output });
             })
