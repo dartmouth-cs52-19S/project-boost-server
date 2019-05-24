@@ -5,11 +5,14 @@ import dotenv from 'dotenv';
 import { Map } from 'immutable';
 import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
+
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
 import { groupBy, splitByAvgProductivity } from '../constants/group_by';
 import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
+
+const moment = require('moment');
 
 // create user object for this id if one doesn't exist already
 const createUser = (req, res, next) => {
@@ -127,6 +130,216 @@ export const updateUserSettings = (req, res, next) => {
       if (error) {
         res.status(500).send(`Error upon saving user settings for user with id ${userID}. Could not find user.`);
       }
+    });
+};
+
+export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) => {
+  const { userID, days } = req.body;
+
+  // const days = 14; // last 14 days . if days = 7, find all locations w. productivity == null in last 7 days
+
+  User.aggregate([
+    { $match: { _id: userID } },
+    { $project: { frequentLocations: 1, _id: 0 } }])
+    .then((foundLocations, error) => {
+      const foundLocations1 = foundLocations[0].frequentLocations;
+      const timeStampOfExactlyOneWeekAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
+      const onlyFilteredLocationObjs = foundLocations1.filter((locationObj) => {
+        return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyOneWeekAgo;
+      });
+
+      console.log(timeStampOfExactlyOneWeekAgo);
+
+      console.log(onlyFilteredLocationObjs.length);
+
+      res.send(onlyFilteredLocationObjs);
+      // res.send(foundLocations[0].frequentLocations);
+    })
+    .catch((error) => {
+      res.status(500).send(error);
+    });
+};
+
+export const updateProductivityLevel = (req, res, next) => {
+  const { userID, productivity } = req.body;
+  const { locationID } = req.params;
+
+  console.log('you hit the route!');
+
+  User.findOne({ _id: userID }, { frequentLocations: 1 })
+    .then((foundUser) => {
+      console.log('you found the user!');
+
+      const foundLocationObj = foundUser.frequentLocations.id(locationID);
+      foundLocationObj.productivity = productivity;
+
+      console.log(foundLocationObj);
+      // res.send(foundLocationObj);
+
+      console.log('yay!');
+
+      foundUser.save()
+        .then((updatedUserandLocationObj) => {
+          console.log('Successfully saved!');
+        })
+        .catch((error) => {
+          res.status(500).send('Error on saving the user once location productivity has been updated!');
+        });
+    })
+    .catch((error) => {
+      res.status(500).send(error);
+    });
+
+  console.log('bump!');
+
+  LocationModel.findOne({ _id: locationID })
+    .then((foundLocation) => {
+      foundLocation.productivity = productivity;
+
+      foundLocation.save()
+        .then((savedfoundLocation) => {
+          console.log(`Successfully set the location document with id ${locationID} to have a productivity of ${productivity}`);
+          res.send(savedfoundLocation);
+        })
+        .catch((error) => {
+          res.status(500).send(`Error upon saving location document with id ${locationID}`);
+        });
+    });
+};
+
+const getSum = (total, num) => {
+  return total + num;
+};
+
+function dayOfWeekAsString(dayIndex) {
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
+}
+
+export const getMostProductiveWeekDay = (req, res, next) => {
+  const { userID } = req.body;
+
+  // const userID = req.body.userID;
+
+  const Sunday = [];
+  const Monday = [];
+  const Tuesday = [];
+  const Wednesday = [];
+  const Thursday = [];
+  const Friday = [];
+  const Saturday = [];
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      foundUser.frequentLocations.forEach((locationObj) => {
+        const EpochOfSingularLocationObj = locationObj.startTime;
+        const ProductivityOfSingularLocationObj = locationObj.productivity;
+
+        if (ProductivityOfSingularLocationObj) {
+          const dayOfWeek = moment(EpochOfSingularLocationObj).format('d'); // dayOfWeek is a string
+
+          switch (dayOfWeek)
+          {
+            case '0':
+            // console.log('Sunday');
+              Sunday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '1':
+            // console.log('Monday');
+              Monday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '2':
+            // console.log('Tuesday');
+              Tuesday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '3':
+            // console.log('Wednesday');
+              Wednesday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '4':
+            // console.log('Thursday');
+              Thursday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            case '5':
+            // console.log('Friday');
+              Friday.push(Number(ProductivityOfSingularLocationObj));
+              break;
+            default:
+            // console.log('Saturday');
+              Saturday.push(Number(ProductivityOfSingularLocationObj));
+          }
+        }
+      });
+
+      // CHECK IF ANY OF SUNDAY, MONDAY, TUESDAY, WEDNESDAY ... ETC . , IS NULL
+
+      const sumOfSunday = Sunday.reduce(getSum);
+      const sumOfMonday = Monday.reduce(getSum);
+      const sumOfTuesday = Tuesday.reduce(getSum);
+      const sumOfWednesday = Wednesday.reduce(getSum);
+      const sumOfThursday = Thursday.reduce(getSum);
+      const sumOfFriday = Friday.reduce(getSum);
+      const sumOfSaturday = Saturday.reduce(getSum);
+
+      const avgProductivityofSunday = (sumOfSunday / Sunday.length);
+      const avgProductivityofMonday = (sumOfMonday / Monday.length);
+      const avgProductivityofTuesday = (sumOfTuesday / Tuesday.length);
+      const avgProductivityofWednesday = (sumOfWednesday / Wednesday.length);
+      const avgProductivityofThursday = (sumOfThursday / Thursday.length);
+      const avgProductivityofFriday = (sumOfFriday / Friday.length);
+      const avgProductivityofSaturday = (sumOfSaturday / Saturday.length);
+
+      console.log(avgProductivityofSunday);
+      console.log(avgProductivityofMonday);
+      console.log(avgProductivityofTuesday);
+      console.log(avgProductivityofWednesday);
+      console.log(avgProductivityofThursday);
+      console.log(avgProductivityofFriday);
+      console.log(avgProductivityofSaturday);
+
+      const highestAvgProductivity = Math.max(avgProductivityofSunday, avgProductivityofMonday, avgProductivityofTuesday, avgProductivityofWednesday, avgProductivityofThursday, avgProductivityofFriday, avgProductivityofSaturday);
+
+      console.log('The highest avg Productivity is: ');
+      console.log(highestAvgProductivity);
+
+      let mostProductivityWeekDay = 6;
+
+      switch (highestAvgProductivity)
+      {
+        case (avgProductivityofSunday):
+          mostProductivityWeekDay = 0;
+          break;
+        case (avgProductivityofMonday):
+          mostProductivityWeekDay = 1;
+          break;
+        case (avgProductivityofTuesday):
+          mostProductivityWeekDay = 2;
+          break;
+        case (avgProductivityofWednesday):
+          mostProductivityWeekDay = 3;
+          break;
+        case (avgProductivityofThursday):
+          mostProductivityWeekDay = 4;
+          break;
+        case (avgProductivityofFriday):
+          mostProductivityWeekDay = 5;
+          break;
+        default:
+          mostProductivityWeekDay = 6;
+      }
+
+      console.log('Your most productive weekDay is: ');
+      console.log(mostProductivityWeekDay);
+
+      const mostProductivityWeekDayString = dayOfWeekAsString(mostProductivityWeekDay);
+
+      // const mostProductivityWeekDayString = moment('5').format('dddd');
+
+      console.log(mostProductivityWeekDayString);
+
+      res.send({ message: 'success!' });
+    })
+    .catch((error) => {
+      res.status(500).send(error);
     });
 };
 

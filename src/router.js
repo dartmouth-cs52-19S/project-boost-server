@@ -34,6 +34,19 @@ router.put('/updateUserSettings', (req, res, next) => {
   Users.updateUserSettings(req, res, next);
 });
 
+router.get('/getLocationsWithProductivityNullWithinLastNDays', (req, res, next) => {
+  Users.getLocationsWithProductivityNullWithinLastNDays(req, res, next);
+});
+
+router.put('/updateProductivityLevel/:locationID', (req, res, next) => {
+  Users.updateProductivityLevel(req, res, next);
+});
+
+router.get('/getMostProductiveWeekDay', (req, res, next) => {
+  // res.send({ message: 'hello!' });
+  Users.getMostProductiveWeekDay(req, res, next);
+});
+
 router.post('/storeBackgroundData', (req, res, next) => {
   Users.storeBackgroundData(req, res, next);
 });
