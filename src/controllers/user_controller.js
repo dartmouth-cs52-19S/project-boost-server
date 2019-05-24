@@ -144,20 +144,6 @@ export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) 
     .catch((error) => {
       res.status(500).send(error);
     });
-
-  // { $unwind: '$frequentLocations' },
-  // { $match: { productivity: null } },
-  // { $limit: 5 }])
-
-  // User.findOne({ _id: userID })
-  //   .then((foundUser) => {
-  //     // res.send({ message: 'success!' });
-  //     res.send(foundUser);
-  //     // res.send(foundUser.frequentLocations); // find all its locations. test this in Postman!
-  //   })
-  //   .catch((error) => {
-  //     res.status(500).send(error);
-  //   });
 };
 
 export const updateProductivityLevel = (req, res, next) => {
@@ -206,45 +192,6 @@ export const updateProductivityLevel = (req, res, next) => {
         });
     });
 };
-
-//   foundUser.frequentLocations.findOne({ _id: locationID })
-//     .then((foundLocation) => {
-//       console.log('you found the location!');
-//       res.send(foundLocation);
-//     })
-//     .catch((error) => {
-//       res.status(500).error('Error on finding User or finding location');
-//     });
-// })
-// .catch((error) => {
-//   res.status(500).send(error);
-// });
-
-// foundUser.LocationSchema.findOne({ _id: locationID })
-// .then((foundLocation) => {
-//   console.log('you found the location!');
-//   res.send(foundLocation);
-// })
-// .catch((error) => {
-//   res.status(500).error('Error on finding User or finding location');
-// });
-
-// LocationModel.findOne({ _id: locationID }) // is this the correct way to query for it...? // also, is LocationModel correct...?
-//   .then((foundLocation) => {
-//     foundLocation.productivity = productivity;
-
-//     foundLocation.save()
-//       .then((savedfoundLocation) => {
-//         console.log(`Successfully set the location document with id ${locationID} to have a productivity of ${productivity}`);
-//         res.send(savedfoundLocation);
-//       })
-//       .catch((error) => {
-//         res.status(500).send(`Error upon saving location document with id ${locationID}`);
-//       });
-//   })
-//   .catch((error) => {
-//     res.status(500).send(error);
-//   });
 
 const getSum = (total, num) => {
   return total + num;
@@ -374,77 +321,6 @@ export const getMostProductiveWeekDay = (req, res, next) => {
       // const mostProductivityWeekDayString = moment('5').format('dddd');
 
       console.log(mostProductivityWeekDayString);
-
-      // console.log('The length of your Sunday [] is: ');
-      // console.log(Sunday.length);
-
-      // console.log('The length of your Monday [] is: ');
-      // console.log(Monday.length);
-
-      // console.log('The length of your Tuesday [] is: ');
-      // console.log(Tuesday.length);
-
-      // console.log('The length of your Wednesday [] is: ');
-      // console.log(Wednesday.length);
-
-      // console.log('The length of your Thursday [] is: ');
-      // console.log(Thursday.length);
-
-      // console.log('The length of your Friday [] is: ');
-      // console.log(Friday.length);
-
-      // console.log('The length of your Saturday [] is: ');
-      // console.log(Saturday.length);
-
-      // console.log(foundUser.frequentLocations[0].startTime);
-
-      // const EpochOfSingularLocation = foundUser.frequentLocations[0].startTime;
-      // const ProductivityOfSingularLocation = foundUser.frequentLocations[0].productivity;
-
-      // console.log('The productivity of your singular locationObj is: ');
-      // console.log(ProductivityOfSingularLocation);
-
-      // const dayOfWeek = moment(EpochOfSingularLocation).format('d'); // dayOfWeek is a string
-
-
-      // switch (dayOfWeek)
-      // {
-      //   case '0':
-      //     console.log('Sunday');
-      //     Sunday.push(ProductivityOfSingularLocation);
-      //     break;
-      //   case '1':
-      //     console.log('Monday');
-      //     Monday.push(ProductivityOfSingularLocation);
-      //     break;
-      //   case '2':
-      //     console.log('Tuesday');
-      //     Tuesday.push(ProductivityOfSingularLocation);
-      //     break;
-      //   case '3':
-      //     console.log('Wednesday');
-      //     Wednesday.push(ProductivityOfSingularLocation);
-      //     break;
-      //   case '4':
-      //     console.log('Thursday');
-      //     Thursday.push(ProductivityOfSingularLocation);
-      //     break;
-      //   case '5':
-      //     console.log('Friday');
-      //     Friday.push(ProductivityOfSingularLocation);
-      //     break;
-      //   default:
-      //     console.log('Saturday');
-      //     Saturday.push(ProductivityOfSingularLocation);
-      // }
-
-      // console.log('Your formatted timestamp day of week is: ');
-      // console.log(dayOfWeek);
-
-      // console.log('The length of your Monday [] is: ');
-      // console.log(Monday.length);
-
-      // res.send({ EpochOfSingularLocation });
 
       res.send({ message: 'success!' });
     })
