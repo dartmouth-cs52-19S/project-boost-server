@@ -42,10 +42,9 @@ router.put('/updateProductivityLevel/:locationID', (req, res, next) => {
   Users.updateProductivityLevel(req, res, next);
 });
 
-router.get('/getMostProductiveWeekDay', (req, res, next) => {
-  // res.send({ message: 'hello!' });
-  Users.getMostProductiveWeekDay(req, res, next);
-});
+router.get('/getMostProductiveWeekDay/:userID', Users.getMostProductiveWeekDay);
+
+router.get('/getLeastProductiveWeekDay/:userID', Users.getLeastProductiveWeekDay);
 
 router.post('/storeBackgroundData', (req, res, next) => {
   Users.storeBackgroundData(req, res, next);
