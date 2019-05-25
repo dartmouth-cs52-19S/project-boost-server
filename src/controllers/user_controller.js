@@ -13,6 +13,7 @@ import getLocationInfo from '../services/google_api';
 dotenv.config({ silent: true });
 
 const moment = require('moment');
+const schedule = require('node-schedule');
 
 // create user object for this id if one doesn't exist already
 const createUser = (req, res, next) => {
@@ -779,8 +780,6 @@ const addToFrequentLocations = (uid, dataToBeProcessed) => {
     });
 };
 
-// ROBBIE: CALL THIS FUNCTION EACH NIGHT AT 7PM TO PROCESS THE WAITING DATA IN THE USER'S POOL
-
 // go through a user's background location data and add to their frequent locations
 const processBackgroundLocationData = (uid) => {
   User.findOne({ _id: uid })
@@ -908,6 +907,36 @@ const processBackgroundLocationData = (uid) => {
       console.error(error.message);
     });
 };
+
+// ROBBIE: CALL processBackgroundLocationData  EACH NIGHT AT 7PM TO PROCESS THE WAITING DATA IN THE USER'S POOL
+// const rule = new schedule.RecurrenceRule();
+// rule.hour = 19;
+
+// automatically processes background location data for all users everyday @ 7 PM
+const automaticProcessBackgroundLocationData = schedule.scheduleJob({ hour: 19 }, () => {
+  User.find({})
+    .then((allUsers) => {
+      allUsers.forEach((user) => {
+        const userID = user._id;
+        processBackgroundLocationData(userID);
+      });
+    });
+});
+
+// const automaticFunction1 = schedule.scheduleJob({ second: [0, new schedule.Range(1, 59)] }, () => {
+//   console.log('Today is recognized by Britney Spears!');
+// });
+
+// export const 2dummyFindAllUsers = (req, res, next) => {
+//   // res.send({ message: 'hello! you are in user_controller.js!' });
+//   User.find({})
+//     .then((allUsers) => {
+//       allUsers.forEach((user) => {
+//         const userID = user._id;
+//         processBackgroundLocationData(userID);
+//       });
+//     });
+// };
 
 // get the top n most productive locations by average productivity level
 // tie breakers are ranked by number of times the location was observed
