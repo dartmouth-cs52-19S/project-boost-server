@@ -7,12 +7,13 @@ import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
 
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
-import { groupBy, splitByAvgProductivity } from '../constants/group_by';
+import { splitByAvgProductivity } from '../constants/group_by';
 import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
 
 const moment = require('moment');
+const schedule = require('node-schedule');
 
 // create user object for this id if one doesn't exist already
 const createUser = (req, res, next) => {
@@ -328,9 +329,9 @@ export const getWeekDayProductivityAverages = (userID) => {
     });
 };
 
-export const getMostProductiveWeekDay = (req, res, next) => {
+export const setMostProductiveWeekDay = (userID) => {
   // function which calculates the average productivity of each day of the week
-  getWeekDayProductivityAverages(req.query.userID).then((weekDayProductivityAverages) => {
+  getWeekDayProductivityAverages(userID).then((weekDayProductivityAverages) => {
     const avgProductivityofSunday = weekDayProductivityAverages[0];
     const avgProductivityofMonday = weekDayProductivityAverages[1];
     const avgProductivityofTuesday = weekDayProductivityAverages[2];
@@ -369,7 +370,23 @@ export const getMostProductiveWeekDay = (req, res, next) => {
 
     const mostProductivityWeekDayString = dayOfWeekAsString(mostProductivityWeekDay);
 
-    res.send({
+    User.findOne({ _id: userID })
+      .then((foundUser) => {
+        foundUser.mostProductiveWeekDay = mostProductivityWeekDayString;
+
+        foundUser.save()
+          .then((savedUser) => {
+            console.log(`Updated mostProductiveWeekDay of user with id ${userID}`);
+          })
+          .catch((error) => {
+            console.log(`Error upon saving user with id ${userID} when updating their leastProductiveWeekDay field`);
+          });
+      })
+      .catch((error) => {
+        console.log(`Error upon finding user with id ${userID} when updating their leastProductiveWeekDay field`);
+      });
+
+    console.log({
       highestAvgProductivity,
       mostProductivityWeekDay,
       mostProductivityWeekDayString,
@@ -377,9 +394,33 @@ export const getMostProductiveWeekDay = (req, res, next) => {
   });
 };
 
+export const getMostProductiveWeekDay = (req, res, next) => {
+  const { userID } = req.query;
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      res.json({ mostProductiveWeekDay: foundUser.mostProductiveWeekDay });
+    })
+    .catch((error) => {
+      res.status(500).send(error);
+    });
+};
+
 export const getLeastProductiveWeekDay = (req, res, next) => {
+  const { userID } = req.query;
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      res.json({ leastProductiveWeekDay: foundUser.leastProductiveWeekDay });
+    })
+    .catch((error) => {
+      res.status(500).send(error);
+    });
+};
+
+export const setLeastProductiveWeekDay = (userID) => {
   // function which calculates the average productivity of each day of the week
-  getWeekDayProductivityAverages(req.query.userID).then((weekDayProductivityAverages) => {
+  getWeekDayProductivityAverages(userID).then((weekDayProductivityAverages) => {
     const avgProductivityofSunday = weekDayProductivityAverages[0];
     const avgProductivityofMonday = weekDayProductivityAverages[1];
     const avgProductivityofTuesday = weekDayProductivityAverages[2];
@@ -418,7 +459,23 @@ export const getLeastProductiveWeekDay = (req, res, next) => {
 
     const leastProductivityWeekDayString = dayOfWeekAsString(leastProductivityWeekDay);
 
-    res.send({
+    User.findOne({ _id: userID })
+      .then((foundUser) => {
+        foundUser.leastProductiveWeekDay = leastProductivityWeekDayString;
+
+        foundUser.save()
+          .then((savedUser) => {
+            console.log(`Updated leastProductiveWeekDay of user with id ${userID}`);
+          })
+          .catch((error) => {
+            console.log(`Error upon saving user with id ${userID} when updating their leastProductiveWeekDay field`);
+          });
+      })
+      .catch((error) => {
+        console.log(`Error upon finding user with id ${userID} when updating their leastProductiveWeekDay field`);
+      });
+
+    console.log({
       lowestAvgProductivity,
       leastProductivityWeekDay,
       leastProductivityWeekDayString,
@@ -779,8 +836,6 @@ const addToFrequentLocations = (uid, dataToBeProcessed) => {
     });
 };
 
-// ROBBIE: CALL THIS FUNCTION EACH NIGHT AT 7PM TO PROCESS THE WAITING DATA IN THE USER'S POOL
-
 // go through a user's background location data and add to their frequent locations
 const processBackgroundLocationData = (uid) => {
   User.findOne({ _id: uid })
@@ -908,6 +963,22 @@ const processBackgroundLocationData = (uid) => {
       console.error(error.message);
     });
 };
+
+// automatically processes background location data, and set most/least productiveWeekDay for all users everyday @ 7 PM
+const automaticProcessBackgroundLocationData = schedule.scheduleJob({ hour: 19 }, () => {
+  User.find({})
+    .then((allUsers) => {
+      allUsers.forEach((user) => {
+        const userID = user._id;
+        processBackgroundLocationData(userID);
+        setMostProductiveWeekDay(userID);
+        setLeastProductiveWeekDay(userID);
+        console.log(`Just automatically ran scheduled processBackgroundLocationData for user ${userID}.`);
+        console.log(`Just automatically ran scheduled setMostProductiveWeekDay for user ${userID}.`);
+        console.log(`Just automatically ran scheduled setLeastProductiveWeekDay for user ${userID}.`);
+      });
+    });
+});
 
 // get the top n most productive locations by average productivity level
 // tie breakers are ranked by number of times the location was observed
@@ -1172,5 +1243,5 @@ function tokenForUser(user) {
 }
 
 export {
-  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getMostFrequentlyVisitedLocationsRanked, getProductivityScoresLastThirtyDays,
+  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getMostFrequentlyVisitedLocationsRanked, getProductivityScoresLastThirtyDays, automaticProcessBackgroundLocationData,
 };
