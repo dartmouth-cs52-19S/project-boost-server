@@ -7,7 +7,7 @@ import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
 
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
-import { groupBy, splitByAvgProductivity } from '../constants/group_by';
+import { splitByAvgProductivity } from '../constants/group_by';
 import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
@@ -973,9 +973,9 @@ const automaticProcessBackgroundLocationData = schedule.scheduleJob({ hour: 19 }
         processBackgroundLocationData(userID);
         setMostProductiveWeekDay(userID);
         setLeastProductiveWeekDay(userID);
-        console.log('Just automatically ran scheduled processBackgroundLocationData for all users.')
-        console.log('Just automatically ran scheduled setMostProductiveWeekDay for all users');
-        console.log('Just automatically ran scheduled setLeastProductiveWeekDay for all users');
+        console.log(`Just automatically ran scheduled processBackgroundLocationData for user ${userID}.`);
+        console.log(`Just automatically ran scheduled setMostProductiveWeekDay for user ${userID}.`);
+        console.log(`Just automatically ran scheduled setLeastProductiveWeekDay for user ${userID}.`);
       });
     });
 });
@@ -1243,5 +1243,5 @@ function tokenForUser(user) {
 }
 
 export {
-  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getMostFrequentlyVisitedLocationsRanked, getProductivityScoresLastThirtyDays,
+  createUser, setModelRun, storeBackgroundData, getMostProductiveLocationsRanked, getMostFrequentlyVisitedLocationsRanked, getProductivityScoresLastThirtyDays, automaticProcessBackgroundLocationData,
 };
