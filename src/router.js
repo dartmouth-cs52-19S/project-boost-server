@@ -50,10 +50,6 @@ router.get('/getLeastProductiveWeekDay', (req, res, next) => {
   Users.getLeastProductiveWeekDay(req, res, next);
 });
 
-router.get('/dummyFindAllUsers', (req, res, next) => {
-  Users.dummyFindAllUsers(req, res, next);
-});
-
 router.post('/storeBackgroundData', (req, res, next) => {
   Users.storeBackgroundData(req, res, next);
 });
