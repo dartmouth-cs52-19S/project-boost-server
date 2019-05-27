@@ -17,7 +17,7 @@ const schedule = require('node-schedule');
 
 // create user object for this id if one doesn't exist already
 const createUser = (req, res, next) => {
-  const { userID, initialUploadData } = req.body; // userID obtained from firebase sign in w. Google
+  const { userID } = req.body; // userID obtained from firebase sign in w. Google
 
   if (!userID) {
     return res.status(422).send('You must provide the firebase userID');
@@ -29,7 +29,6 @@ const createUser = (req, res, next) => {
         const user = new User();
 
         user._id = userID;
-        user.initialUploadData = initialUploadData;
         user.presetProductiveLocations = {};
         user.settings = {};
         user.mostProductiveWeekDay = '';
@@ -81,7 +80,17 @@ export const updateUserSettings = (req, res, next) => {
     .then((foundUser) => {
       foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
       foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
-      foundUser.presetProductiveLocations = presetProductiveLocations; // set productivity levels for known locations
+
+      const newPresetProductiveLocations = {};
+
+      // only grab observations where productivity score about 0 was recorded
+      Object.keys(presetProductiveLocations).forEach((address) => {
+        if (presetProductiveLocations[address] > 0) {
+          newPresetProductiveLocations[address] = presetProductiveLocations[address];
+        }
+      });
+
+      foundUser.presetProductiveLocations = newPresetProductiveLocations; // set productivity levels for known locations
 
       // now, go into all the locations of this user and set strings and productivities respectively
       const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
@@ -652,8 +661,6 @@ const setGoogleLocationInfo = (uid) => {
       });
   });
 };
-
-setGoogleLocationInfo('vSBrHUpwFZPqGIisDcBPS6cuLTx1');
 
 const setModelRun = (req, res, modelOutput) => {
   const { uid } = req.body; // userID obtained from firebase sign in w. Google
