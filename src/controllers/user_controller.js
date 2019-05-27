@@ -418,14 +418,14 @@ export const getMostProductiveWeekDay = (req, res, next) => {
   User.findOne({ _id: userID })
     .then((foundUser) => {
       switch (days) { // return appropriate answer based on input
-        case (7):
+        case ('7'):
           res.json({ mostProductiveWeekDayLast7Days: foundUser.mostProductiveWeekDayLast7Days });
           break;
-        case (30):
+        case ('30'):
           res.json({ mostProductiveWeekDayLast30Days: foundUser.mostProductiveWeekDayLast30Days });
           break;
         default:
-          res.json({ mostProductiveWeekDayAllTime: foundUser.mostProductiveWeekDay });
+          res.json({ mostProductiveWeekDayAllTime: foundUser.mostProductiveWeekDayAllTime });
       }
     })
     .catch((error) => {
@@ -439,14 +439,14 @@ export const getLeastProductiveWeekDay = (req, res, next) => {
   User.findOne({ _id: userID })
     .then((foundUser) => {
       switch (days) { // return appropriate answer based on input
-        case (7):
+        case ('7'):
           res.json({ leastProductiveWeekDayLast7Days: foundUser.leastProductiveWeekDayLast7Days });
           break;
-        case (30):
+        case ('30'):
           res.json({ leastProductiveWeekDayLast30Days: foundUser.leastProductiveWeekDayLast30Days });
           break;
         default:
-          res.json({ leastProductiveWeekDayAllTime: foundUser.leastProductiveWeekDay });
+          res.json({ leastProductiveWeekDayAllTime: foundUser.leastProductiveWeekDayAllTime });
       }
     })
     .catch((error) => {
@@ -1140,7 +1140,7 @@ const getMostProductiveLocationsRankedLastNDays = (req, res, next) => {
               // break into categories by productivity level, then sort pieces and combine
               const output = splitByAvgProductivity(topFive);
 
-              res.send({ output });
+              res.send({ output, days });
             })
             .catch((error) => {
               res.status(500).send(error);
