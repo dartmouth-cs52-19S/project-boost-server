@@ -81,21 +81,7 @@ export const updateUserSettings = (req, res, next) => {
     .then((foundUser) => {
       foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
       foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
-
-      const newPresetProductiveLocations = {}; // create a new Object
-
-      // initialize user's preset productive locations
-      Object.keys(foundUser.presetProductiveLocations).forEach((address) => {
-        newPresetProductiveLocations[address] = foundUser.presetProductiveLocations[address];
-      });
-
-      // add all items sent from front-end
-      Object.keys(presetProductiveLocations).forEach((address) => {
-        newPresetProductiveLocations[address] = presetProductiveLocations[address];
-      });
-
-      // store in mongo
-      foundUser.presetProductiveLocations = newPresetProductiveLocations;
+      foundUser.presetProductiveLocations = presetProductiveLocations; // set productivity levels for known locations
 
       // now, go into all the locations of this user and set strings and productivities respectively
       const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
@@ -105,7 +91,7 @@ export const updateUserSettings = (req, res, next) => {
         promises.push(new Promise((resolve, reject) => {
           if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
             if (!locationObj.productivity) {
-              locationObj.productivity = newPresetProductiveLocations[locationObj.location.formatted_address];
+              locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
             }
           }
           resolve();
@@ -603,14 +589,16 @@ const setGoogleLocationInfo = (uid) => {
             // loop over each location and object and check if we passed on making an API call but had to wait to access the data
             foundUser.frequentLocations.forEach((locationObj) => {
               confirmPromises.push(new Promise((resolve, reject) => {
-              // if this location has an empty location field and we know we stored it's google info, set it
-                if (Object.keys(locationObj).length === 0 && Object.keys(discoveredLocations).contains(locationObj.latLongLocation)) {
+                // if this location has an empty location field and we know we stored it's google info, set it
+                if (Object.keys(locationObj.location).length === 0 && Object.keys(discoveredLocations).includes(locationObj.latLongLocation)) {
                   locationObj.location = discoveredLocations[locationObj.latLongLocation];
                 }
 
                 // if this location is also a location the user set as a productive location, set the productivity
-                if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
-                  locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
+                if (foundUser.presetProductiveLocations) {
+                  if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
+                    locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
+                  }
                 }
 
                 resolve();
@@ -664,6 +652,8 @@ const setGoogleLocationInfo = (uid) => {
       });
   });
 };
+
+setGoogleLocationInfo('vSBrHUpwFZPqGIisDcBPS6cuLTx1');
 
 const setModelRun = (req, res, modelOutput) => {
   const { uid } = req.body; // userID obtained from firebase sign in w. Google
