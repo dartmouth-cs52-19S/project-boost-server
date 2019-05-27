@@ -42,11 +42,11 @@ router.put('/updateProductivityLevel/:locationID', (req, res, next) => {
   Users.updateProductivityLevel(req, res, next);
 });
 
-router.get('/getMostProductiveWeekDay', (req, res, next) => {
+router.get('/getMostProductiveWeekDay', (req, res, next) => { // send in 'days' as a param in your query
   Users.getMostProductiveWeekDay(req, res, next);
 });
 
-router.get('/getLeastProductiveWeekDay', (req, res, next) => {
+router.get('/getLeastProductiveWeekDay', (req, res, next) => { // send in 'days' as a param in your query
   Users.getLeastProductiveWeekDay(req, res, next);
 });
 
@@ -54,16 +54,16 @@ router.post('/storeBackgroundData', (req, res, next) => {
   Users.storeBackgroundData(req, res, next);
 });
 
-router.get('/mostProductiveLocationsRanked', (req, res, next) => {
-  Users.getMostProductiveLocationsRanked(req, res, next);
+router.get('/mostProductiveLocationsRankedLastNDays', (req, res, next) => {
+  Users.getMostProductiveLocationsRankedLastNDays(req, res, next);
 });
 
 router.get('/mostFrequentlyVisitedLocationsRanked', (req, res, next) => {
   Users.getMostFrequentlyVisitedLocationsRanked(req, res, next);
 });
 
-router.get('/productivityScoresLastThirtyDays', (req, res, next) => {
-  Users.getProductivityScoresLastThirtyDays(req, res, next);
+router.get('/productivityScoresLastNDays', (req, res, next) => {
+  Users.getProductivityScoresLastNDays(req, res, next);
 });
 
 router.post('/uploadGoogleLocationData', upload.single('file'), (req, res) => {
