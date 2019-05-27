@@ -18,7 +18,7 @@ const schedule = require('node-schedule');
 
 // create user object for this id if one doesn't exist already
 const createUser = (req, res, next) => {
-  const { userID, initialUploadData } = req.body; // userID obtained from firebase sign in w. Google
+  const { userID } = req.body; // userID obtained from firebase sign in w. Google
 
   if (!userID) {
     return res.status(422).send('You must provide the firebase userID');
@@ -30,7 +30,6 @@ const createUser = (req, res, next) => {
         const user = new User();
 
         user._id = userID;
-        user.initialUploadData = initialUploadData;
         user.presetProductiveLocations = {};
         user.settings = {};
         user.mostProductiveWeekDay = '';
@@ -83,20 +82,16 @@ export const updateUserSettings = (req, res, next) => {
       foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
       foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
 
-      const newPresetProductiveLocations = {}; // create a new Object
+      const newPresetProductiveLocations = {};
 
-      // initialize user's preset productive locations
-      Object.keys(foundUser.presetProductiveLocations).forEach((address) => {
-        newPresetProductiveLocations[address] = foundUser.presetProductiveLocations[address];
-      });
-
-      // add all items sent from front-end
+      // only grab observations where productivity score about 0 was recorded
       Object.keys(presetProductiveLocations).forEach((address) => {
-        newPresetProductiveLocations[address] = presetProductiveLocations[address];
+        if (presetProductiveLocations[address] > 0) {
+          newPresetProductiveLocations[address] = presetProductiveLocations[address];
+        }
       });
 
-      // store in mongo
-      foundUser.presetProductiveLocations = newPresetProductiveLocations;
+      foundUser.presetProductiveLocations = newPresetProductiveLocations; // set productivity levels for known locations
 
       // now, go into all the locations of this user and set strings and productivities respectively
       const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
@@ -106,7 +101,7 @@ export const updateUserSettings = (req, res, next) => {
         promises.push(new Promise((resolve, reject) => {
           if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
             if (!locationObj.productivity) {
-              locationObj.productivity = newPresetProductiveLocations[locationObj.location.formatted_address];
+              locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
             }
           }
           resolve();
@@ -653,14 +648,16 @@ const setGoogleLocationInfo = (uid) => {
             // loop over each location and object and check if we passed on making an API call but had to wait to access the data
             foundUser.frequentLocations.forEach((locationObj) => {
               confirmPromises.push(new Promise((resolve, reject) => {
-              // if this location has an empty location field and we know we stored it's google info, set it
-                if (Object.keys(locationObj).length === 0 && Object.keys(discoveredLocations).contains(locationObj.latLongLocation)) {
+                // if this location has an empty location field and we know we stored it's google info, set it
+                if (Object.keys(locationObj.location).length === 0 && Object.keys(discoveredLocations).includes(locationObj.latLongLocation)) {
                   locationObj.location = discoveredLocations[locationObj.latLongLocation];
                 }
 
                 // if this location is also a location the user set as a productive location, set the productivity
-                if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
-                  locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
+                if (foundUser.presetProductiveLocations) {
+                  if (foundUser.presetProductiveLocations[locationObj.location.formatted_address]) {
+                    locationObj.productivity = foundUser.presetProductiveLocations[locationObj.location.formatted_address];
+                  }
                 }
 
                 resolve();
