@@ -49,10 +49,10 @@ Once this is complete, run:
 
 ## Authors
 
-Thomas Monfre, '21
-Robert He, '20
-Faustino Cortina, '21
-Varsha Iyer, '21
+Thomas Monfre '21,
+Robert He '20,
+Faustino Cortina '21,
+Varsha Iyer '21,
 Syed Tanveer, '21
 
 ## Acknowledgments
