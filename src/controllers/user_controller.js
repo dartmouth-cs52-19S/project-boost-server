@@ -1290,7 +1290,7 @@ const getProductivityScoresLastNDays = (req, res, next) => {
         output[date] = (count === 0 ? 0 : sum / count);
       });
 
-      res.send(output);
+      res.send({ output, days });
     })
     .catch(() => {
       res.status(500).send(`No user found with id: ${req.query.uid}`);
