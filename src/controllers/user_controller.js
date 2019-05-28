@@ -32,8 +32,6 @@ const createUser = (req, res, next) => {
         user._id = userID;
         user.presetProductiveLocations = {};
         user.settings = {};
-        user.mostProductiveWeekDay = '';
-        user.leastProductiveWeekDay = '';
         user.homeLocation = '';
         user.latlongHomeLocation = '';
         user.backgroundLocationDataToBeProcessed = [];
@@ -69,66 +67,6 @@ const createUser = (req, res, next) => {
     }) // end of .then
     .catch((err) => {
       res.sendStatus(500);
-    });
-};
-
-export const updateUserSettings = (req, res, next) => {
-  const {
-    userID, homeLocation, homeLocationLatLong, presetProductiveLocations,
-  } = req.body;
-
-  User.findOne({ _id: userID })
-    .then((foundUser) => {
-      foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
-      foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
-
-      const newPresetProductiveLocations = {};
-
-      // only grab observations where productivity score about 0 was recorded
-      Object.keys(presetProductiveLocations).forEach((address) => {
-        if (presetProductiveLocations[address] > 0) {
-          newPresetProductiveLocations[address] = presetProductiveLocations[address];
-        }
-      });
-
-      foundUser.presetProductiveLocations = newPresetProductiveLocations; // set productivity levels for known locations
-
-      // now, go into all the locations of this user and set strings and productivities respectively
-      const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
-      const promises = [];
-
-      foundUser.frequentLocations.forEach((locationObj) => {
-        promises.push(new Promise((resolve, reject) => {
-          if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
-            if (!locationObj.productivity) {
-              locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
-            }
-          }
-          resolve();
-        }));
-      });
-
-      Promise.all(promises)
-        .then((results) => {
-          // end result should be foundUser.presetProductiveLocations = { "9 Maynard Street, Hanover, NH": 5, "Dartmouth Street, Boston, MA,USA": 3 }
-          foundUser.save()
-            .then((response) => {
-              res.send({ message: `Success saving user settings for user with id ${userID}` });
-            })
-            .catch((err) => {
-              if (err) {
-                res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
-              }
-            });
-        })
-        .catch((error) => {
-          res.status(500).send(error);
-        });
-    })
-    .catch((error) => {
-      if (error) {
-        res.status(500).send(`Error upon saving user settings for user with id ${userID}. Could not find user.`);
-      }
     });
 };
 
@@ -383,13 +321,13 @@ export const setMostProductiveWeekDay = (userID, days) => {
       .then((foundUser) => {
         switch (days) { // set the field on the user model appropriately depending on days argument
           case (7):
-            foundUser.mostProductiveWeekDayLast7Days = mostProductivityWeekDayString;
+            foundUser.mostProductiveWeekDayLast7Days = { Weekday: mostProductivityWeekDayString, avgProductivity: highestAvgProductivity };
             break;
           case (30):
-            foundUser.mostProductiveWeekDayLast30Days = mostProductivityWeekDayString;
+            foundUser.mostProductiveWeekDayLast30Days = { Weekday: mostProductivityWeekDayString, avgProductivity: highestAvgProductivity };
             break;
           default:
-            foundUser.mostProductiveWeekDayAllTime = mostProductivityWeekDayString;
+            foundUser.mostProductiveWeekDayAllTime = { Weekday: mostProductivityWeekDayString, avgProductivity: highestAvgProductivity };
         }
 
         foundUser.save()
@@ -419,13 +357,46 @@ export const getMostProductiveWeekDay = (req, res, next) => {
     .then((foundUser) => {
       switch (days) { // return appropriate answer based on input
         case ('7'):
-          res.json({ mostProductiveWeekDayLast7Days: foundUser.mostProductiveWeekDayLast7Days });
+          if (foundUser.mostProductiveWeekDayLast7Days.avgProductivity === 0 || foundUser.mostProductiveWeekDayLast7Days.avgProductivity === '0') {
+            res.json({
+              mostProductiveWeekDayLast7Days: 'Not enough information',
+              avgProductivity: foundUser.mostProductiveWeekDayLast7Days.avgProductivity,
+            });
+          }
+          else {
+            res.json({
+              mostProductiveWeekDayLast7Days: foundUser.mostProductiveWeekDayLast7Days.Weekday,
+              avgProductivity: foundUser.mostProductiveWeekDayLast7Days.avgProductivity,
+            });
+          }
           break;
         case ('30'):
-          res.json({ mostProductiveWeekDayLast30Days: foundUser.mostProductiveWeekDayLast30Days });
+          if (foundUser.mostProductiveWeekDayLast30Days.avgProductivity === 0 || foundUser.mostProductiveWeekDayLast30Days.avgProductivity === '0') {
+            res.json({
+              mostProductiveWeekDayLast30Days: 'Not enough information',
+              avgProductivity: foundUser.mostProductiveWeekDayLast30Days.avgProductivity,
+            });
+          }
+          else {
+            res.json({
+              mostProductiveWeekDayLast30Days: foundUser.mostProductiveWeekDayLast30Days.Weekday,
+              avgProductivity: foundUser.mostProductiveWeekDayLast30Days.avgProductivity,
+            });
+          }
           break;
         default:
-          res.json({ mostProductiveWeekDayAllTime: foundUser.mostProductiveWeekDayAllTime });
+          if (foundUser.mostProductiveWeekDayAllTime.avgProductivity === 0 || foundUser.mostProductiveWeekDayAllTime.avgProductivity === '0') {
+            res.json({
+              mostProductiveWeekDayAllTime: 'Not enough information',
+              avgProductivity: foundUser.mostProductiveWeekDayAllTime.avgProductivity,
+            });
+          }
+          else {
+            res.json({
+              mostProductiveWeekDayAllTime: foundUser.mostProductiveWeekDayAllTime.Weekday,
+              avgProductivity: foundUser.mostProductiveWeekDayAllTime.avgProductivity,
+            });
+          }
       }
     })
     .catch((error) => {
@@ -440,13 +411,46 @@ export const getLeastProductiveWeekDay = (req, res, next) => {
     .then((foundUser) => {
       switch (days) { // return appropriate answer based on input
         case ('7'):
-          res.json({ leastProductiveWeekDayLast7Days: foundUser.leastProductiveWeekDayLast7Days });
+          if (foundUser.leastProductiveWeekDayLast7Days.avgProductivity === 0 || foundUser.leastProductiveWeekDayLast7Days.avgProductivity === '0') {
+            res.json({
+              leastProductiveWeekDayLast7Days: 'Not enough information',
+              avgProductivity: foundUser.leastProductiveWeekDayLast7Days.avgProductivity,
+            });
+          }
+          else {
+            res.json({
+              leastProductiveWeekDayLast7Days: foundUser.leastProductiveWeekDayLast7Days.Weekday,
+              avgProductivity: foundUser.leastProductiveWeekDayLast7Days.avgProductivity,
+            });
+          }
           break;
         case ('30'):
-          res.json({ leastProductiveWeekDayLast30Days: foundUser.leastProductiveWeekDayLast30Days });
+          if (foundUser.leastProductiveWeekDayLast30Days.avgProductivity === 0 || foundUser.leastProductiveWeekDayLast30Days.avgProductivity === '0') {
+            res.json({
+              leastProductiveWeekDayLast30Days: 'Not enough information',
+              avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity,
+            });
+          }
+          else {
+            res.json({
+              leastProductiveWeekDayLast30Days: foundUser.leastProductiveWeekDayLast30Days.Weekday,
+              avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity, 
+            });
+          }
           break;
         default:
-          res.json({ leastProductiveWeekDayAllTime: foundUser.leastProductiveWeekDayAllTime });
+          if (foundUser.leastProductiveWeekDayAllTime.avgProductivity === 0 || foundUser.leastProductiveWeekDayAllTime === '0') {
+            res.json({
+              leastProductiveWeekDayAllTime: 'Not enough information',
+              avgProductivity: foundUser.leastProductiveWeekDayAllTime.avgProductivity,
+            });
+          }
+          else {
+            res.json({
+              leastProductiveWeekDayAllTime: foundUser.leastProductiveWeekDayAllTime.Weekday,
+              avgProductivity: foundUser.leastProductiveWeekDayAllTime.avgProductivity,
+            });
+          }
       }
     })
     .catch((error) => {
@@ -499,13 +503,13 @@ export const setLeastProductiveWeekDay = (userID, days) => {
       .then((foundUser) => {
         switch (days) { // set the field on the user model appropriately depending on days argument
           case (7):
-            foundUser.leastProductiveWeekDayLast7Days = leastProductivityWeekDayString;
+            foundUser.leastProductiveWeekDayLast7Days = { Weekday: leastProductivityWeekDayString, avgProductivity: lowestAvgProductivity };
             break;
           case (30):
-            foundUser.leastProductiveWeekDayLast30Days = leastProductivityWeekDayString;
+            foundUser.leastProductiveWeekDayLast30Days = { Weekday: leastProductivityWeekDayString, avgProductivity: lowestAvgProductivity };
             break;
           default:
-            foundUser.leastProductiveWeekDayAllTime = leastProductivityWeekDayString;
+            foundUser.leastProductiveWeekDayAllTime = { Weekday: leastProductivityWeekDayString, avgProductivity: lowestAvgProductivity };
         }
 
         foundUser.save()
@@ -1011,8 +1015,9 @@ const processBackgroundLocationData = (uid) => {
     });
 };
 
+// hour: 19
 // automatically processes background location data, and set most/least productiveWeekDay for all users everyday @ 7 PM
-const automaticProcessBackgroundLocationData = schedule.scheduleJob({ hour: 19 }, () => {
+const automaticProcessBackgroundLocationData = schedule.scheduleJob({ second: 0 }, () => {
   User.find({})
     .then((allUsers) => {
       allUsers.forEach((user) => {
@@ -1294,6 +1299,73 @@ const getProductivityScoresLastNDays = (req, res, next) => {
     })
     .catch(() => {
       res.status(500).send(`No user found with id: ${req.query.uid}`);
+    });
+};
+
+export const updateUserSettings = (req, res, next) => {
+  const {
+    userID, homeLocation, homeLocationLatLong, presetProductiveLocations,
+  } = req.body;
+
+  User.findOne({ _id: userID })
+    .then((foundUser) => {
+      foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
+      foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
+
+      const newPresetProductiveLocations = {};
+
+      // only grab observations where productivity score about 0 was recorded
+      Object.keys(presetProductiveLocations).forEach((address) => {
+        if (presetProductiveLocations[address] > 0) {
+          newPresetProductiveLocations[address] = presetProductiveLocations[address];
+        }
+      });
+
+      foundUser.presetProductiveLocations = newPresetProductiveLocations; // set productivity levels for known locations
+
+      // now, go into all the locations of this user and set strings and productivities respectively
+      const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
+      const promises = [];
+
+      foundUser.frequentLocations.forEach((locationObj) => {
+        promises.push(new Promise((resolve, reject) => {
+          if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
+            if (!locationObj.productivity) {
+              locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
+            }
+          }
+          resolve();
+        }));
+      });
+
+      Promise.all(promises)
+        .then((results) => {
+          // end result should be foundUser.presetProductiveLocations = { "9 Maynard Street, Hanover, NH": 5, "Dartmouth Street, Boston, MA,USA": 3 }
+          foundUser.save()
+            .then((response) => {
+              res.send({ message: `Success saving user settings for user with id ${userID}` });
+            })
+            .catch((err) => {
+              if (err) {
+                res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
+              }
+            });
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
+
+      setMostProductiveWeekDay(userID);
+      setLeastProductiveWeekDay(userID);
+      setMostProductiveWeekDay(userID, 7); // updates mostProductiveWeekDayLast7Days for User Model
+      setLeastProductiveWeekDay(userID, 7);
+      setMostProductiveWeekDay(userID, 30); // mostProductiveWeekDayLast30Days for User Model
+      setLeastProductiveWeekDay(userID, 30);
+    })
+    .catch((error) => {
+      if (error) {
+        res.status(500).send(`Error upon saving user settings for user with id ${userID}. Could not find user.`);
+      }
     });
 };
 
