@@ -3,7 +3,7 @@
 import jwt from 'jwt-simple';
 import dotenv from 'dotenv';
 import { Map } from 'immutable';
-import { type } from 'os';
+// import { type } from 'os';
 import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
 
@@ -56,7 +56,7 @@ const createUser = (req, res, next) => {
             }
           });
       } else {
-        console.log('A user with this firebase uid already exists! Sending the info...');
+        // console.log('A user with this firebase uid already exists! Sending the info...');
         res.send({
           presetProductiveLocations: foundUser.presetProductiveLocations,
           settings: foundUser.settings,
@@ -83,7 +83,7 @@ export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) 
       const timeStampOfExactlyNDaysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
       const onlyFilteredLocationObjs = FrequentLocations.filter((locationObj) => {
         return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyNDaysAgo;
-      });
+      }); // return just the LocationObjs that have a startTime more recently than var "days" days ago AND that has productivity undefined
 
       res.send(onlyFilteredLocationObjs);
     })
@@ -101,12 +101,9 @@ export const updateProductivityLevel = (req, res, next) => {
       const foundLocationObj = foundUser.frequentLocations.id(locationID);
       foundLocationObj.productivity = productivity;
 
-      console.log(foundLocationObj);
-      // res.send(foundLocationObj);
-
       foundUser.save()
         .then((updatedUserandLocationObj) => {
-          console.log('Successfully saved!');
+          // console.log('Successfully saved!');
           res.send({ message: 'Successfully saved!' });
         })
         .catch((error) => {
@@ -123,7 +120,7 @@ export const updateProductivityLevel = (req, res, next) => {
 
       foundLocation.save()
         .then((savedfoundLocation) => {
-          console.log(`Successfully set the location document with id ${locationID} to have a productivity of ${productivity}`);
+          // console.log(`Successfully set the location document with id ${locationID} to have a productivity of ${productivity}`);
           res.send(savedfoundLocation);
         })
         .catch((error) => {
@@ -160,7 +157,7 @@ export const getWeekDayProductivityAverages = (userID, days) => {
 
         onlyFilteredLocationObjs = foundUser.frequentLocations.filter((locationObj) => {
           return locationObj.startTime >= timeStampOfExactlyNDaysAgo;
-        });
+        }); // return just the LocationObjs that have a startTime more recently than var "days" days ago
       }
       else { // if days is not defined, then just give WeekDayProductivityAverages for all Time
         onlyFilteredLocationObjs = foundUser.frequentLocations;
@@ -171,9 +168,9 @@ export const getWeekDayProductivityAverages = (userID, days) => {
         const ProductivityOfSingularLocationObj = locationObj.productivity;
 
         if (ProductivityOfSingularLocationObj) {
-          const dayOfWeek = moment(EpochOfSingularLocationObj).format('d'); // dayOfWeek is a string
+          const dayOfWeek = moment(EpochOfSingularLocationObj).format('d'); // dayOfWeek is a string. moment will take a timestamp (i.e. '3242358932423423') and return '0', '1', '2', '3', '4', '5', ...
 
-          switch (dayOfWeek)
+          switch (dayOfWeek) // depending on the value of dayOfWeek, push the productivity of the locationObj into the appropriate array declared earlier
           {
             case '0':
               Sunday.push(Number(ProductivityOfSingularLocationObj));
@@ -199,7 +196,7 @@ export const getWeekDayProductivityAverages = (userID, days) => {
         }
       });
 
-      const sumOfSunday = Sunday.reduce(getSum, 0);
+      const sumOfSunday = Sunday.reduce(getSum, 0); // calculate the sum of each array
       const sumOfMonday = Monday.reduce(getSum, 0);
       const sumOfTuesday = Tuesday.reduce(getSum, 0);
       const sumOfWednesday = Wednesday.reduce(getSum, 0);
@@ -218,7 +215,7 @@ export const getWeekDayProductivityAverages = (userID, days) => {
       let SaturdayArrayLength;
 
 
-      // Check if any of the arrays are empty, then find average
+      // Check if any of the arrays are empty, then find average of the numbers within each array
 
       // if the length is 0, return 1 so we can at least divide
       if (Sunday.length === 0) {
@@ -291,7 +288,7 @@ export const setMostProductiveWeekDay = (userID, days) => {
 
     let mostProductivityWeekDay = 6;
 
-    switch (highestAvgProductivity)
+    switch (highestAvgProductivity) // compare the highestAvgProductivity to see which day's avgProductivity it is equal to. if there's a match, you've found the mostProductiveWeekDay
     {
       case (avgProductivityofSunday):
         mostProductivityWeekDay = 0;
@@ -315,7 +312,7 @@ export const setMostProductiveWeekDay = (userID, days) => {
         mostProductivityWeekDay = 6;
     }
 
-    const mostProductivityWeekDayString = dayOfWeekAsString(mostProductivityWeekDay);
+    const mostProductivityWeekDayString = dayOfWeekAsString(mostProductivityWeekDay); // using a separate function that we've defined, take in a number (i.e. 0, 1, 2, 3, 4) and return "Monday", "Tuesday", "Wednesday", "Thursday"...
 
     User.findOne({ _id: userID })
       .then((foundUser) => {
@@ -332,21 +329,21 @@ export const setMostProductiveWeekDay = (userID, days) => {
 
         foundUser.save()
           .then((savedUser) => {
-            console.log(`Updated mostProductiveWeekDay of user with id ${userID}`);
+            // console.log(`Updated mostProductiveWeekDay of user with id ${userID}`);
           })
           .catch((error) => {
-            console.log(`Error upon saving user with id ${userID} when updating their mostProductiveWeekDay field`);
+            // console.log(`Error upon saving user with id ${userID} when updating their mostProductiveWeekDay field`);
           });
       })
       .catch((error) => {
-        console.log(`Error upon finding user with id ${userID} when updating their mostProductiveWeekDay field`);
+        // console.log(`Error upon finding user with id ${userID} when updating their mostProductiveWeekDay field`);
       });
 
-    console.log({
+    /* console.log({
       highestAvgProductivity,
       mostProductivityWeekDay,
       mostProductivityWeekDayString,
-    });
+    }); */
   });
 };
 
@@ -434,7 +431,7 @@ export const getLeastProductiveWeekDay = (req, res, next) => {
           else {
             res.json({
               leastProductiveWeekDayLast30Days: foundUser.leastProductiveWeekDayLast30Days.Weekday,
-              avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity, 
+              avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity,
             });
           }
           break;
@@ -514,21 +511,21 @@ export const setLeastProductiveWeekDay = (userID, days) => {
 
         foundUser.save()
           .then((savedUser) => {
-            console.log(`Updated leastProductiveWeekDay of user with id ${userID}`);
+            // console.log(`Updated leastProductiveWeekDay of user with id ${userID}`);
           })
           .catch((error) => {
-            console.log(`Error upon saving user with id ${userID} when updating their leastProductiveWeekDay field`);
+            // console.log(`Error upon saving user with id ${userID} when updating their leastProductiveWeekDay field`);
           });
       })
       .catch((error) => {
-        console.log(`Error upon finding user with id ${userID} when updating their leastProductiveWeekDay field`);
+        // console.log(`Error upon finding user with id ${userID} when updating their leastProductiveWeekDay field`);
       });
 
-    console.log({
+    /* console.log({
       lowestAvgProductivity,
       leastProductivityWeekDay,
       leastProductivityWeekDayString,
-    });
+    }); */
   });
 };
 
@@ -673,7 +670,7 @@ const setGoogleLocationInfo = (uid) => {
               .then(() => {
                 foundUser.save()
                   .then((result) => {
-                    console.log('DONE');
+                    // console.log('DONE');
                     console.log(times);
 
                     // run check of frequent locations to determine if there are any productivity levels we can set
@@ -1015,9 +1012,8 @@ const processBackgroundLocationData = (uid) => {
     });
 };
 
-// hour: 19
 // automatically processes background location data, and set most/least productiveWeekDay for all users everyday @ 7 PM
-const automaticProcessBackgroundLocationData = schedule.scheduleJob({ second: 0 }, () => {
+const automaticProcessBackgroundLocationData = schedule.scheduleJob({ hour: 19 }, () => {
   User.find({})
     .then((allUsers) => {
       allUsers.forEach((user) => {
@@ -1029,9 +1025,9 @@ const automaticProcessBackgroundLocationData = schedule.scheduleJob({ second: 0 
         setLeastProductiveWeekDay(userID, 7);
         setMostProductiveWeekDay(userID, 30); // mostProductiveWeekDayLast30Days for User Model
         setLeastProductiveWeekDay(userID, 30);
-        console.log(`Just automatically ran scheduled processBackgroundLocationData for user ${userID}.`);
-        console.log(`Just automatically ran scheduled setMostProductiveWeekDay for user ${userID}.`);
-        console.log(`Just automatically ran scheduled setLeastProductiveWeekDay for user ${userID}.`);
+        // console.log(`Just automatically ran scheduled processBackgroundLocationData for user ${userID}.`);
+        // console.log(`Just automatically ran scheduled setMostProductiveWeekDay for user ${userID}.`);
+        // console.log(`Just automatically ran scheduled setLeastProductiveWeekDay for user ${userID}.`);
       });
     });
 });
@@ -1062,7 +1058,7 @@ const getMostProductiveLocationsRankedLastNDays = (req, res, next) => {
 
       const onlyFilteredLocationObjs = foundUser.frequentLocations.filter((locationObj) => {
         return locationObj.startTime >= timeStampOfExactlyNDaysAgo;
-      });
+      }); // return just the LocationObjs that have a startTime more recently than var "days" days ago
 
       // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
       onlyFilteredLocationObjs.forEach((locationObj) => {
@@ -1354,6 +1350,8 @@ export const updateUserSettings = (req, res, next) => {
         .catch((error) => {
           res.status(500).send(error);
         });
+
+      // after updating Settings, now the productivity of some locations have changed. must now recalculate most/least ProductiveWeekDays
 
       setMostProductiveWeekDay(userID);
       setLeastProductiveWeekDay(userID);
