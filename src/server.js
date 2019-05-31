@@ -4,9 +4,18 @@ import cors from 'cors';
 import path from 'path';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
+import * as admin from 'firebase-admin';
 import router from './router';
 
-// initialize
+// initialize firebase admin
+const serviceAccount = require('./services/firebaseServiceAccountKey.json');
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: 'https://boost-240320.firebaseio.com',
+});
+
+// initialize server
 const app = express();
 
 // enable/disable cross origin resource sharing if necessary

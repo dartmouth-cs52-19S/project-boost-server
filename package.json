@@ -28,6 +28,7 @@
     "ejs": "^2.6.1",
     "express": "^4.16.4",
     "firebase": "^6.0.2",
+    "firebase-admin": "^8.0.0",
     "fs": "^0.0.1-security",
     "immutable": "^4.0.0-rc.12",
     "jwt-simple": "^0.5.6",

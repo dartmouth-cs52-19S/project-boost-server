@@ -1,14 +1,13 @@
-/* eslint-disable consistent-return */
-/* eslint-disable prefer-destructuring */
 import jwt from 'jwt-simple';
 import dotenv from 'dotenv';
+import * as admin from 'firebase-admin';
 import { Map } from 'immutable';
-// import { type } from 'os';
 import User from '../models/user_model';
 import { LocationModel } from '../models/location_model';
 
 import { subtractMinutes, computeDistance } from '../constants/distance_time';
 import { splitByAvgProductivity } from '../constants/group_by';
+import { getSum, dayOfWeekAsString } from '../constants/days_of_week';
 import getLocationInfo from '../services/google_api';
 
 dotenv.config({ silent: true });
@@ -24,71 +23,90 @@ const createUser = (req, res, next) => {
     return res.status(422).send('You must provide the firebase userID');
   }
 
-  User.findOne({ _id: userID })
-    .then((foundUser) => {
-      if (foundUser === null) {
-        const user = new User();
+  // authenticate user token
+  admin.auth().verifyIdToken(userID)
+    .then((decodedToken) => {
+      const uid = decodedToken.uid;
 
-        user._id = userID;
-        user.presetProductiveLocations = {};
-        user.settings = {};
-        user.homeLocation = '';
-        user.latlongHomeLocation = '';
-        user.backgroundLocationDataToBeProcessed = [];
-        user.frequentLocations = [];
-        user.initialUploadData = {};
+      User.findOne({ _id: uid })
+        .then((foundUser) => {
+          if (foundUser === null) {
+            const user = new User();
 
-        user.save()
-          .then((response) => { // if save is successfull
+            user._id = uid;
+            user.presetProductiveLocations = {};
+            user.settings = {};
+            user.homeLocation = '';
+            user.latlongHomeLocation = '';
+            user.backgroundLocationDataToBeProcessed = [];
+            user.frequentLocations = [];
+            user.initialUploadData = {};
+
+            user.save()
+              .then((response) => { // if save is successfull
+                res.send({
+                  token: tokenForUser(user),
+                  response: {
+                    presetProductiveLocations: response.presetProductiveLocations,
+                    settings: response.settings,
+                    homeLocation: response.homeLocation,
+                    latlongHomeLocation: response.latlongHomeLocation,
+                  },
+                });
+              })
+              .catch((error) => { // if save throws an error
+                if (error) {
+                  res.status(500).send(error);
+                }
+              });
+          } else {
             res.send({
-              token: tokenForUser(user),
-              response: {
-                presetProductiveLocations: response.presetProductiveLocations,
-                settings: response.settings,
-                homeLocation: response.homeLocation,
-                latlongHomeLocation: response.latlongHomeLocation,
-              },
+              presetProductiveLocations: foundUser.presetProductiveLocations,
+              settings: foundUser.settings,
+              homeLocation: foundUser.homeLocation,
+              latlongHomeLocation: foundUser.latlongHomeLocation,
             });
-          })
-          .catch((error) => { // if save throws an error
-            if (error) {
-              res.sendStatus(500);
-            }
-          });
-      } else {
-        // console.log('A user with this firebase uid already exists! Sending the info...');
-        res.send({
-          presetProductiveLocations: foundUser.presetProductiveLocations,
-          settings: foundUser.settings,
-          homeLocation: foundUser.homeLocation,
-          latlongHomeLocation: foundUser.latlongHomeLocation,
+          }
+        }) // end of .then
+        .catch((err) => {
+          res.status(500).send(err);
         });
-      }
-    }) // end of .then
-    .catch((err) => {
-      res.sendStatus(500);
+    })
+    // authentication of token failed
+    .catch((error) => {
+      res.status(401).send(error);
     });
 };
 
 export const getLocationsWithProductivityNullWithinLastNDays = (req, res, next) => {
+  // days is last 14 days, if days = 7, find all locations w. productivity == null in last 7 days
   const { userID, days } = req.query;
 
-  // const days = 14; // last 14 days . if days = 7, find all locations w. productivity == null in last 7 days
+  // authenticate user token
+  admin.auth().verifyIdToken(userID)
+    .then((decodedToken) => {
+      const uid = decodedToken.uid;
 
-  User.aggregate([
-    { $match: { _id: userID } },
-    { $project: { frequentLocations: 1, _id: 0 } }])
-    .then((foundLocations, error) => {
-      const FrequentLocations = foundLocations[0].frequentLocations;
-      const timeStampOfExactlyNDaysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
-      const onlyFilteredLocationObjs = FrequentLocations.filter((locationObj) => {
-        return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyNDaysAgo;
-      }); // return just the LocationObjs that have a startTime more recently than var "days" days ago AND that has productivity undefined
+      User.aggregate([
+        { $match: { _id: uid } },
+        { $project: { frequentLocations: 1, _id: 0 } }])
+        .then((foundLocations, error) => {
+          const FrequentLocations = foundLocations[0].frequentLocations;
+          const timeStampOfExactlyNDaysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
+          const onlyFilteredLocationObjs = FrequentLocations.filter((locationObj) => {
+            return locationObj.productivity === undefined && locationObj.startTime >= timeStampOfExactlyNDaysAgo;
+          }); // return just the LocationObjs that have a startTime more recently than var "days" days ago AND that has productivity undefined
 
-      res.send(onlyFilteredLocationObjs);
+          res.send(onlyFilteredLocationObjs);
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
+    // ...
     })
+    // authentication of token failed
     .catch((error) => {
-      res.status(500).send(error);
+      res.status(401).send(error);
     });
 };
 
@@ -96,46 +114,46 @@ export const updateProductivityLevel = (req, res, next) => {
   const { userID, productivity } = req.body;
   const { locationID } = req.params;
 
-  User.findOne({ _id: userID }, { frequentLocations: 1 })
-    .then((foundUser) => {
-      const foundLocationObj = foundUser.frequentLocations.id(locationID);
-      foundLocationObj.productivity = productivity;
+  // authenticate user token
+  admin.auth().verifyIdToken(userID)
+    .then((decodedToken) => {
+      const uid = decodedToken.uid;
 
-      foundUser.save()
-        .then((updatedUserandLocationObj) => {
-          // console.log('Successfully saved!');
-          res.send({ message: 'Successfully saved!' });
+      User.findOne({ _id: uid }, { frequentLocations: 1 })
+        .then((foundUser) => {
+          const foundLocationObj = foundUser.frequentLocations.id(locationID);
+          foundLocationObj.productivity = productivity;
+
+          foundUser.save()
+            .then(() => {
+              res.send({ message: 'Successfully saved!' });
+            })
+            .catch((error) => {
+              res.status(500).send(`Error on saving the user once location productivity has been updated: ${error.message}`);
+            });
         })
         .catch((error) => {
-          res.status(500).send('Error on saving the user once location productivity has been updated!');
+          res.status(500).send(error);
+        });
+
+      LocationModel.findOne({ _id: locationID })
+        .then((foundLocation) => {
+          foundLocation.productivity = productivity;
+
+          foundLocation.save()
+            .then((savedfoundLocation) => {
+              res.send(savedfoundLocation);
+            })
+            .catch((error) => {
+              res.status(500).send(`Error upon saving location document with id ${locationID}`);
+            });
         });
     })
+    // authentication of token failed
     .catch((error) => {
-      res.status(500).send(error);
-    });
-
-  LocationModel.findOne({ _id: locationID })
-    .then((foundLocation) => {
-      foundLocation.productivity = productivity;
-
-      foundLocation.save()
-        .then((savedfoundLocation) => {
-          // console.log(`Successfully set the location document with id ${locationID} to have a productivity of ${productivity}`);
-          res.send(savedfoundLocation);
-        })
-        .catch((error) => {
-          res.status(500).send(`Error upon saving location document with id ${locationID}`);
-        });
+      res.status(401).send(error);
     });
 };
-
-const getSum = (total, num) => {
-  return total + num;
-};
-
-function dayOfWeekAsString(dayIndex) {
-  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
-}
 
 // set days = 7 for last7Days, days = 30 for last30Days, don't put anything for days if you want all time
 export const getWeekDayProductivityAverages = (userID, days) => {
@@ -327,131 +345,136 @@ export const setMostProductiveWeekDay = (userID, days) => {
             foundUser.mostProductiveWeekDayAllTime = { Weekday: mostProductivityWeekDayString, avgProductivity: highestAvgProductivity };
         }
 
-        foundUser.save()
-          .then((savedUser) => {
-            // console.log(`Updated mostProductiveWeekDay of user with id ${userID}`);
-          })
-          .catch((error) => {
-            // console.log(`Error upon saving user with id ${userID} when updating their mostProductiveWeekDay field`);
-          });
-      })
-      .catch((error) => {
-        // console.log(`Error upon finding user with id ${userID} when updating their mostProductiveWeekDay field`);
+        foundUser.save();
       });
-
-    /* console.log({
-      highestAvgProductivity,
-      mostProductivityWeekDay,
-      mostProductivityWeekDayString,
-    }); */
   });
 };
 
 export const getMostProductiveWeekDay = (req, res, next) => {
-  const { userID, days } = req.query; // finish writing this
+  const { userID, days } = req.query;
 
-  User.findOne({ _id: userID })
-    .then((foundUser) => {
-      switch (days) { // return appropriate answer based on input
-        case ('7'):
-          if (foundUser.mostProductiveWeekDayLast7Days.avgProductivity === 0 || foundUser.mostProductiveWeekDayLast7Days.avgProductivity === '0') {
-            res.json({
-              mostProductiveWeekDayLast7Days: 'Not enough information',
-              avgProductivity: foundUser.mostProductiveWeekDayLast7Days.avgProductivity,
-            });
+  // authenticate user token
+  admin.auth().verifyIdToken(userID)
+    .then((decodedToken) => {
+      const uid = decodedToken.uid;
+
+      User.findOne({ _id: uid })
+        .then((foundUser) => {
+          switch (days) { // return appropriate answer based on input
+            case ('7'):
+              if (foundUser.mostProductiveWeekDayLast7Days.avgProductivity === 0 || foundUser.mostProductiveWeekDayLast7Days.avgProductivity === '0') {
+                res.json({
+                  mostProductiveWeekDayLast7Days: 'Not enough information',
+                  avgProductivity: foundUser.mostProductiveWeekDayLast7Days.avgProductivity,
+                });
+              }
+              else {
+                res.json({
+                  mostProductiveWeekDayLast7Days: foundUser.mostProductiveWeekDayLast7Days.Weekday,
+                  avgProductivity: foundUser.mostProductiveWeekDayLast7Days.avgProductivity,
+                });
+              }
+              break;
+            case ('30'):
+              if (foundUser.mostProductiveWeekDayLast30Days.avgProductivity === 0 || foundUser.mostProductiveWeekDayLast30Days.avgProductivity === '0') {
+                res.json({
+                  mostProductiveWeekDayLast30Days: 'Not enough information',
+                  avgProductivity: foundUser.mostProductiveWeekDayLast30Days.avgProductivity,
+                });
+              }
+              else {
+                res.json({
+                  mostProductiveWeekDayLast30Days: foundUser.mostProductiveWeekDayLast30Days.Weekday,
+                  avgProductivity: foundUser.mostProductiveWeekDayLast30Days.avgProductivity,
+                });
+              }
+              break;
+            default:
+              if (foundUser.mostProductiveWeekDayAllTime.avgProductivity === 0 || foundUser.mostProductiveWeekDayAllTime.avgProductivity === '0') {
+                res.json({
+                  mostProductiveWeekDayAllTime: 'Not enough information',
+                  avgProductivity: foundUser.mostProductiveWeekDayAllTime.avgProductivity,
+                });
+              }
+              else {
+                res.json({
+                  mostProductiveWeekDayAllTime: foundUser.mostProductiveWeekDayAllTime.Weekday,
+                  avgProductivity: foundUser.mostProductiveWeekDayAllTime.avgProductivity,
+                });
+              }
           }
-          else {
-            res.json({
-              mostProductiveWeekDayLast7Days: foundUser.mostProductiveWeekDayLast7Days.Weekday,
-              avgProductivity: foundUser.mostProductiveWeekDayLast7Days.avgProductivity,
-            });
-          }
-          break;
-        case ('30'):
-          if (foundUser.mostProductiveWeekDayLast30Days.avgProductivity === 0 || foundUser.mostProductiveWeekDayLast30Days.avgProductivity === '0') {
-            res.json({
-              mostProductiveWeekDayLast30Days: 'Not enough information',
-              avgProductivity: foundUser.mostProductiveWeekDayLast30Days.avgProductivity,
-            });
-          }
-          else {
-            res.json({
-              mostProductiveWeekDayLast30Days: foundUser.mostProductiveWeekDayLast30Days.Weekday,
-              avgProductivity: foundUser.mostProductiveWeekDayLast30Days.avgProductivity,
-            });
-          }
-          break;
-        default:
-          if (foundUser.mostProductiveWeekDayAllTime.avgProductivity === 0 || foundUser.mostProductiveWeekDayAllTime.avgProductivity === '0') {
-            res.json({
-              mostProductiveWeekDayAllTime: 'Not enough information',
-              avgProductivity: foundUser.mostProductiveWeekDayAllTime.avgProductivity,
-            });
-          }
-          else {
-            res.json({
-              mostProductiveWeekDayAllTime: foundUser.mostProductiveWeekDayAllTime.Weekday,
-              avgProductivity: foundUser.mostProductiveWeekDayAllTime.avgProductivity,
-            });
-          }
-      }
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
     })
+    // user authentication failed
     .catch((error) => {
-      res.status(500).send(error);
+      res.status(401).send(error);
     });
 };
 
 export const getLeastProductiveWeekDay = (req, res, next) => {
-  const { userID, days } = req.query; // finish writing this
+  const { userID, days } = req.query;
 
-  User.findOne({ _id: userID })
-    .then((foundUser) => {
-      switch (days) { // return appropriate answer based on input
-        case ('7'):
-          if (foundUser.leastProductiveWeekDayLast7Days.avgProductivity === 0 || foundUser.leastProductiveWeekDayLast7Days.avgProductivity === '0') {
-            res.json({
-              leastProductiveWeekDayLast7Days: 'Not enough information',
-              avgProductivity: foundUser.leastProductiveWeekDayLast7Days.avgProductivity,
-            });
+  // authenticate user token
+  admin.auth().verifyIdToken(userID)
+    .then((decodedToken) => {
+      const uid = decodedToken.uid;
+
+      User.findOne({ _id: uid })
+        .then((foundUser) => {
+          switch (days) { // return appropriate answer based on input
+            case ('7'):
+              if (foundUser.leastProductiveWeekDayLast7Days.avgProductivity === 0 || foundUser.leastProductiveWeekDayLast7Days.avgProductivity === '0') {
+                res.json({
+                  leastProductiveWeekDayLast7Days: 'Not enough information',
+                  avgProductivity: foundUser.leastProductiveWeekDayLast7Days.avgProductivity,
+                });
+              }
+              else {
+                res.json({
+                  leastProductiveWeekDayLast7Days: foundUser.leastProductiveWeekDayLast7Days.Weekday,
+                  avgProductivity: foundUser.leastProductiveWeekDayLast7Days.avgProductivity,
+                });
+              }
+              break;
+            case ('30'):
+              if (foundUser.leastProductiveWeekDayLast30Days.avgProductivity === 0 || foundUser.leastProductiveWeekDayLast30Days.avgProductivity === '0') {
+                res.json({
+                  leastProductiveWeekDayLast30Days: 'Not enough information',
+                  avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity,
+                });
+              }
+              else {
+                res.json({
+                  leastProductiveWeekDayLast30Days: foundUser.leastProductiveWeekDayLast30Days.Weekday,
+                  avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity,
+                });
+              }
+              break;
+            default:
+              if (foundUser.leastProductiveWeekDayAllTime.avgProductivity === 0 || foundUser.leastProductiveWeekDayAllTime === '0') {
+                res.json({
+                  leastProductiveWeekDayAllTime: 'Not enough information',
+                  avgProductivity: foundUser.leastProductiveWeekDayAllTime.avgProductivity,
+                });
+              }
+              else {
+                res.json({
+                  leastProductiveWeekDayAllTime: foundUser.leastProductiveWeekDayAllTime.Weekday,
+                  avgProductivity: foundUser.leastProductiveWeekDayAllTime.avgProductivity,
+                });
+              }
           }
-          else {
-            res.json({
-              leastProductiveWeekDayLast7Days: foundUser.leastProductiveWeekDayLast7Days.Weekday,
-              avgProductivity: foundUser.leastProductiveWeekDayLast7Days.avgProductivity,
-            });
-          }
-          break;
-        case ('30'):
-          if (foundUser.leastProductiveWeekDayLast30Days.avgProductivity === 0 || foundUser.leastProductiveWeekDayLast30Days.avgProductivity === '0') {
-            res.json({
-              leastProductiveWeekDayLast30Days: 'Not enough information',
-              avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity,
-            });
-          }
-          else {
-            res.json({
-              leastProductiveWeekDayLast30Days: foundUser.leastProductiveWeekDayLast30Days.Weekday,
-              avgProductivity: foundUser.leastProductiveWeekDayLast30Days.avgProductivity,
-            });
-          }
-          break;
-        default:
-          if (foundUser.leastProductiveWeekDayAllTime.avgProductivity === 0 || foundUser.leastProductiveWeekDayAllTime === '0') {
-            res.json({
-              leastProductiveWeekDayAllTime: 'Not enough information',
-              avgProductivity: foundUser.leastProductiveWeekDayAllTime.avgProductivity,
-            });
-          }
-          else {
-            res.json({
-              leastProductiveWeekDayAllTime: foundUser.leastProductiveWeekDayAllTime.Weekday,
-              avgProductivity: foundUser.leastProductiveWeekDayAllTime.avgProductivity,
-            });
-          }
-      }
+        })
+        .catch((error) => {
+          res.status(500).send(error);
+        });
     })
+  // user authentication failed
     .catch((error) => {
-      res.status(500).send(error);
+      res.status(401).send(error);
     });
 };
 
@@ -509,23 +532,8 @@ export const setLeastProductiveWeekDay = (userID, days) => {
             foundUser.leastProductiveWeekDayAllTime = { Weekday: leastProductivityWeekDayString, avgProductivity: lowestAvgProductivity };
         }
 
-        foundUser.save()
-          .then((savedUser) => {
-            // console.log(`Updated leastProductiveWeekDay of user with id ${userID}`);
-          })
-          .catch((error) => {
-            // console.log(`Error upon saving user with id ${userID} when updating their leastProductiveWeekDay field`);
-          });
-      })
-      .catch((error) => {
-        // console.log(`Error upon finding user with id ${userID} when updating their leastProductiveWeekDay field`);
+        foundUser.save();
       });
-
-    /* console.log({
-      lowestAvgProductivity,
-      leastProductivityWeekDay,
-      leastProductivityWeekDayString,
-    }); */
   });
 };
 
@@ -717,69 +725,79 @@ const setModelRun = (req, res, modelOutput) => {
   const { uid } = req.body; // userID obtained from firebase sign in w. Google
 
   if (!uid) {
-    return res.status(422).send('You must provide the firebase userID');
+    return res.status(422).send('You must provide the firebase user auth token');
   }
 
-  User.findOne({ _id: uid })
-    .then((foundUser) => {
-      if (foundUser === null) {
-        res.status(500).send(`No user exists with id: ${uid}`);
-      } else {
-        const output = [];
-        const locationPromises = [];
+  // authenticate user token
+  admin.auth().verifyIdToken(uid)
+    .then((decodedToken) => {
+      const userID = decodedToken.uid;
 
-        // for each location we observed
-        modelOutput.forEach((entry) => {
-          // for each sitting we observed at that location
-          entry[Object.keys(entry)[0]].forEach((sitting) => {
-            // wrap in promise because .save() is async
-            locationPromises.push(new Promise((resolve, reject) => {
-              // create a location object for this sitting at this location
-              const locationObj = new LocationModel();
-              locationObj.latLongLocation = Object.keys(entry)[0];
-              locationObj.startTime = parseInt(sitting.startTime, 10);
-              locationObj.endTime = parseInt(sitting.endTime, 10);
+      User.findOne({ _id: userID })
+        .then((foundUser) => {
+          if (foundUser === null) {
+            res.status(500).send(`No user exists with id: ${userID}`);
+          } else {
+            const output = [];
+            const locationPromises = [];
 
-              // productivity is null, can search on user, frequent locations .find({ productivity: null })
+            // for each location we observed
+            modelOutput.forEach((entry) => {
+              // for each sitting we observed at that location
+              entry[Object.keys(entry)[0]].forEach((sitting) => {
+                // wrap in promise because .save() is async
+                locationPromises.push(new Promise((resolve, reject) => {
+                  // create a location object for this sitting at this location
+                  const locationObj = new LocationModel();
+                  locationObj.latLongLocation = Object.keys(entry)[0];
+                  locationObj.startTime = parseInt(sitting.startTime, 10);
+                  locationObj.endTime = parseInt(sitting.endTime, 10);
 
-              // save location object, then append to frequentLocations array and resolve promise
-              locationObj.save().then(() => {
-                output.push(locationObj);
-                resolve();
-              }).catch((err) => {
-                reject(err);
+                  // productivity is null, can search on user, frequent locations .find({ productivity: null })
+
+                  // save location object, then append to frequentLocations array and resolve promise
+                  locationObj.save().then(() => {
+                    output.push(locationObj);
+                    resolve();
+                  }).catch((err) => {
+                    reject(err);
+                  });
+                }));
               });
-            }));
-          });
-        });
+            });
 
-        // when all location objects for this user are created, save this user and send to res
-        Promise.all(locationPromises).then(() => {
-          foundUser.frequentLocations = output;
-          foundUser.save().then(() => {
-            // grab location details from google api -- run in background and confirm success to user
-            // run twice to ensure async gets all
-            setGoogleLocationInfo(req.body.uid)
-              .then(() => {
-                setGoogleLocationInfo(req.body.uid)
+            // when all location objects for this user are created, save this user and send to res
+            Promise.all(locationPromises).then(() => {
+              foundUser.frequentLocations = output;
+              foundUser.save().then(() => {
+                // grab location details from google api -- run in background and confirm success to user
+                // run twice to ensure async gets all
+                setGoogleLocationInfo(userID)
                   .then(() => {
-                    res.send({ message: 'success!' });
+                    setGoogleLocationInfo(userID)
+                      .then(() => {
+                        res.send({ message: 'success!' });
+                      })
+                      .catch((err) => {
+                        res.status(500).send(err);
+                      });
                   })
                   .catch((err) => {
                     res.status(500).send(err);
                   });
-              })
-              .catch((err) => {
+              }).catch((err) => {
                 res.status(500).send(err);
               });
-          }).catch((err) => {
-            res.status(500).send(err);
-          });
+            });
+          }
+        }) // end of .then
+        .catch((err) => {
+          res.status(500).send(err);
         });
-      }
-    }) // end of .then
-    .catch((err) => {
-      res.status(500).send(err);
+    })
+    // user authentication failed
+    .catch((error) => {
+      res.status(401).send(error);
     });
 };
 
@@ -788,32 +806,42 @@ const storeBackgroundData = (req, res, next) => {
   const { uid, dataToBeProcessed } = req.body; // userID obtained from firebase sign in w. Google
 
   if (!uid) {
-    return res.status(422).send('You must provide the firebase userID');
+    return res.status(422).send('You must provide the firebase user auth token');
   }
 
-  User.findOne({ _id: uid })
-    .then((foundUser) => {
-      // make sure the field exists
-      if (foundUser.backgroundLocationDataToBeProcessed === undefined || foundUser.backgroundLocationDataToBeProcessed === null) {
-        foundUser.backgroundLocationDataToBeProcessed = [];
-      }
+  // authenticate user auth token
+  admin.auth().verifyIdToken(uid)
+    .then((decodedToken) => {
+      const userID = decodedToken.uid;
 
-      // store all data
-      dataToBeProcessed.forEach((element) => {
-        foundUser.backgroundLocationDataToBeProcessed.push(element);
-      });
+      User.findOne({ _id: userID })
+        .then((foundUser) => {
+          // make sure the field exists
+          if (foundUser.backgroundLocationDataToBeProcessed === undefined || foundUser.backgroundLocationDataToBeProcessed === null) {
+            foundUser.backgroundLocationDataToBeProcessed = [];
+          }
 
-      // save object
-      foundUser.save()
-        .then((user) => {
-          res.send({ message: 'success' });
+          // store all data
+          dataToBeProcessed.forEach((element) => {
+            foundUser.backgroundLocationDataToBeProcessed.push(element);
+          });
+
+          // save object
+          foundUser.save()
+            .then(() => {
+              res.send({ message: 'success' });
+            })
+            .catch((error) => {
+              res.status(500).send(error);
+            });
         })
         .catch((error) => {
           res.status(500).send(error);
         });
     })
+    // user authentication failed
     .catch((error) => {
-      res.status(500).send(error);
+      res.status(401).send(error);
     });
 };
 
@@ -1025,9 +1053,6 @@ const automaticProcessBackgroundLocationData = schedule.scheduleJob({ hour: 19 }
         setLeastProductiveWeekDay(userID, 7);
         setMostProductiveWeekDay(userID, 30); // mostProductiveWeekDayLast30Days for User Model
         setLeastProductiveWeekDay(userID, 30);
-        // console.log(`Just automatically ran scheduled processBackgroundLocationData for user ${userID}.`);
-        // console.log(`Just automatically ran scheduled setMostProductiveWeekDay for user ${userID}.`);
-        // console.log(`Just automatically ran scheduled setLeastProductiveWeekDay for user ${userID}.`);
       });
     });
 });
@@ -1047,112 +1072,122 @@ const getMostProductiveLocationsRankedLastNDays = (req, res, next) => {
 
   const timeStampOfExactlyNDaysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).getTime();
 
-  User.findOne({ _id: req.query.uid })
-    .then((foundUser) => {
-      const locationMetrics = {};
-      const promises = [];
+  // authenticate user auth token
+  admin.auth().verifyIdToken(req.query.uid)
+    .then((decodedToken) => {
+      const userID = decodedToken.uid;
 
-      let currentAddress = null;
-      let currentSum = 0;
-      let currentCount = 0;
+      User.findOne({ _id: userID })
+        .then((foundUser) => {
+          const locationMetrics = {};
+          const promises = [];
 
-      const onlyFilteredLocationObjs = foundUser.frequentLocations.filter((locationObj) => {
-        return locationObj.startTime >= timeStampOfExactlyNDaysAgo;
-      }); // return just the LocationObjs that have a startTime more recently than var "days" days ago
+          let currentAddress = null;
+          let currentSum = 0;
+          let currentCount = 0;
 
-      // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
-      onlyFilteredLocationObjs.forEach((locationObj) => {
-        if (locationObj.location.formatted_address) {
-          promises.push(new Promise((resolve, reject) => {
-            if (currentAddress === null) {
-              currentAddress = locationObj.location.formatted_address;
-              currentSum = locationObj.productivity ? locationObj.productivity : 0;
-              currentCount = 1;
+          const onlyFilteredLocationObjs = foundUser.frequentLocations.filter((locationObj) => {
+            return locationObj.startTime >= timeStampOfExactlyNDaysAgo;
+          }); // return just the LocationObjs that have a startTime more recently than var "days" days ago
+
+          // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
+          onlyFilteredLocationObjs.forEach((locationObj) => {
+            if (locationObj.location.formatted_address) {
+              promises.push(new Promise((resolve, reject) => {
+                if (currentAddress === null) {
+                  currentAddress = locationObj.location.formatted_address;
+                  currentSum = locationObj.productivity ? locationObj.productivity : 0;
+                  currentCount = 1;
+                }
+                else if (currentAddress !== locationObj.location.formatted_address) {
+                  if (locationMetrics[currentAddress]) {
+                    locationMetrics[currentAddress] = {
+                      timesObserved: locationMetrics[currentAddress].timesObserved + currentCount,
+                      sumOfProductivity: locationMetrics[currentAddress].sumOfProductivity + currentSum,
+                    };
+                  } else {
+                    locationMetrics[currentAddress] = {
+                      timesObserved: currentCount,
+                      sumOfProductivity: currentSum,
+                    };
+                  }
+
+                  currentAddress = null;
+                  currentSum = 0;
+                  currentCount = 0;
+                }
+                else {
+                  currentSum += locationObj.productivity ? locationObj.productivity : 0;
+                  currentCount += 1;
+                }
+
+                resolve();
+              }));
             }
-            else if (currentAddress !== locationObj.location.formatted_address) {
-              if (locationMetrics[currentAddress]) {
-                locationMetrics[currentAddress] = {
-                  timesObserved: locationMetrics[currentAddress].timesObserved + currentCount,
-                  sumOfProductivity: locationMetrics[currentAddress].sumOfProductivity + currentSum,
-                };
-              } else {
-                locationMetrics[currentAddress] = {
-                  timesObserved: currentCount,
-                  sumOfProductivity: currentSum,
-                };
-              }
-
-              currentAddress = null;
-              currentSum = 0;
-              currentCount = 0;
-            }
-            else {
-              currentSum += locationObj.productivity ? locationObj.productivity : 0;
-              currentCount += 1;
-            }
-
-            resolve();
-          }));
-        }
-      });
-
-      Promise.all(promises)
-        .then((result) => {
-          const summaryPromises = [];
-
-          // once all metrics have been determined, summarize them into average productivity and times observed
-          Object.keys(locationMetrics).forEach((locationName) => {
-            summaryPromises.push(new Promise((resolve, reject) => {
-              locationMetrics[locationName] = {
-                averageProductivity: locationMetrics[locationName].sumOfProductivity / locationMetrics[locationName].timesObserved,
-                timesObserved: locationMetrics[locationName].timesObserved,
-              };
-              resolve();
-            }));
           });
 
-          Promise.all(summaryPromises)
-            .then(() => {
-              const locationInfoSummarized = [];
+          Promise.all(promises)
+            .then((result) => {
+              const summaryPromises = [];
 
-              // create an object with this info
+              // once all metrics have been determined, summarize them into average productivity and times observed
               Object.keys(locationMetrics).forEach((locationName) => {
-                locationInfoSummarized.push({
-                  address: locationName,
-                  averageProductivity: locationMetrics[locationName].averageProductivity,
-                  timesObserved: locationMetrics[locationName].timesObserved,
+                summaryPromises.push(new Promise((resolve, reject) => {
+                  locationMetrics[locationName] = {
+                    averageProductivity: locationMetrics[locationName].sumOfProductivity / locationMetrics[locationName].timesObserved,
+                    timesObserved: locationMetrics[locationName].timesObserved,
+                  };
+                  resolve();
+                }));
+              });
+
+              Promise.all(summaryPromises)
+                .then(() => {
+                  const locationInfoSummarized = [];
+
+                  // create an object with this info
+                  Object.keys(locationMetrics).forEach((locationName) => {
+                    locationInfoSummarized.push({
+                      address: locationName,
+                      averageProductivity: locationMetrics[locationName].averageProductivity,
+                      timesObserved: locationMetrics[locationName].timesObserved,
+                    });
+                  });
+
+                  // sort objects by averageProductivity
+                  locationInfoSummarized.sort((a, b) => {
+                    if (a.averageProductivity < b.averageProductivity) {
+                      return 1;
+                    }
+                    if (a.averageProductivity > b.averageProductivity) {
+                      return -1;
+                    }
+                    return 0;
+                  });
+
+                  // grab the top n most productive locations as measured by average productivity
+                  const topFive = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
+
+                  // break into categories by productivity level, then sort pieces and combine
+                  const output = splitByAvgProductivity(topFive);
+
+                  res.send({ output, days });
+                })
+                .catch((error) => {
+                  res.status(500).send(error);
                 });
-              });
-
-              // sort objects by averageProductivity
-              locationInfoSummarized.sort((a, b) => {
-                if (a.averageProductivity < b.averageProductivity) {
-                  return 1;
-                }
-                if (a.averageProductivity > b.averageProductivity) {
-                  return -1;
-                }
-                return 0;
-              });
-
-              // grab the top n most productive locations as measured by average productivity
-              const topFive = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
-
-              // break into categories by productivity level, then sort pieces and combine
-              const output = splitByAvgProductivity(topFive);
-
-              res.send({ output, days });
             })
             .catch((error) => {
               res.status(500).send(error);
             });
         })
         .catch((error) => {
-          res.status(500).send(error);
+          res.status(500).send(`User with id: ${userID} was not found`);
         });
     })
+    // user authentication failed
     .catch((error) => {
-      res.status(500).send(`User with id: ${req.query.uid} was not found`);
+      res.status(401).send(error);
     });
 };
 
@@ -1165,74 +1200,84 @@ const getMostFrequentlyVisitedLocationsRanked = (req, res, next) => {
     res.status(500).send('You must provide the number of items you would like to receive');
   }
 
-  User.findOne({ _id: req.query.uid })
-    .then((foundUser) => {
-      const locationMetrics = {};
-      const promises = [];
+  // verify user auth token
+  admin.auth().verifyIdToken(req.query.uid)
+    .then((decodedToken) => {
+      const userID = decodedToken.uid;
 
-      let currentAddress = null;
-      let currentCount = 0;
+      User.findOne({ _id: userID })
+        .then((foundUser) => {
+          const locationMetrics = {};
+          const promises = [];
 
-      // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
-      foundUser.frequentLocations.forEach((locationObj) => {
-        if (locationObj.location.formatted_address) {
-          promises.push(new Promise((resolve, reject) => {
-            if (currentAddress === null) {
-              currentAddress = locationObj.location.formatted_address;
-              currentCount = 1;
+          let currentAddress = null;
+          let currentCount = 0;
+
+          // walk through the locations and count the number of times the user has been observed there and sum up the productivity levels
+          foundUser.frequentLocations.forEach((locationObj) => {
+            if (locationObj.location.formatted_address) {
+              promises.push(new Promise((resolve, reject) => {
+                if (currentAddress === null) {
+                  currentAddress = locationObj.location.formatted_address;
+                  currentCount = 1;
+                }
+                else if (currentAddress !== locationObj.location.formatted_address) {
+                  if (locationMetrics[currentAddress]) {
+                    locationMetrics[currentAddress] += currentCount;
+                  } else {
+                    locationMetrics[currentAddress] = currentCount;
+                  }
+
+                  currentAddress = null;
+                  currentCount = 0;
+                }
+                else {
+                  currentCount += 1;
+                }
+
+                resolve();
+              }));
             }
-            else if (currentAddress !== locationObj.location.formatted_address) {
-              if (locationMetrics[currentAddress]) {
-                locationMetrics[currentAddress] += currentCount;
-              } else {
-                locationMetrics[currentAddress] = currentCount;
-              }
+          });
 
-              currentAddress = null;
-              currentCount = 0;
-            }
-            else {
-              currentCount += 1;
-            }
+          Promise.all(promises)
+            .then((result) => {
+              const locationInfoSummarized = [];
 
-            resolve();
-          }));
-        }
-      });
+              // create an object with this info
+              Object.keys(locationMetrics).forEach((locationName) => {
+                locationInfoSummarized.push({
+                  address: locationName,
+                  timesObserved: locationMetrics[locationName],
+                });
+              });
 
-      Promise.all(promises)
-        .then((result) => {
-          const locationInfoSummarized = [];
+              // sort objects by averageProductivity
+              locationInfoSummarized.sort((a, b) => {
+                if (a.timesObserved < b.timesObserved) {
+                  return 1;
+                }
+                if (a.timesObserved > b.timesObserved) {
+                  return -1;
+                }
+                return 0;
+              });
 
-          // create an object with this info
-          Object.keys(locationMetrics).forEach((locationName) => {
-            locationInfoSummarized.push({
-              address: locationName,
-              timesObserved: locationMetrics[locationName],
+              // grab the top n most productive locations as measured by average productivity
+              const output = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
+              res.send({ output });
+            })
+            .catch((error) => {
+              res.status(500).send(error);
             });
-          });
-
-          // sort objects by averageProductivity
-          locationInfoSummarized.sort((a, b) => {
-            if (a.timesObserved < b.timesObserved) {
-              return 1;
-            }
-            if (a.timesObserved > b.timesObserved) {
-              return -1;
-            }
-            return 0;
-          });
-
-          // grab the top n most productive locations as measured by average productivity
-          const output = locationInfoSummarized.slice(0, req.query.numberOfItems < locationInfoSummarized.length ? req.query.numberOfItems : locationInfoSummarized.length - 1);
-          res.send({ output });
         })
         .catch((error) => {
-          res.status(500).send(error);
+          res.status(500).send(`User with id: ${req.query.uid} was not found`);
         });
     })
+    // user authentication failed
     .catch((error) => {
-      res.status(500).send(`User with id: ${req.query.uid} was not found`);
+      res.status(401).send(error);
     });
 };
 
@@ -1244,57 +1289,67 @@ const getProductivityScoresLastNDays = (req, res, next) => {
 
   const days = (!req.query.days) ? 10000 : req.query.days; // if req.query.days is undefined, set days to 10,000 (effectively allTime)
 
-  User.findOne({ _id: req.query.uid })
-    .then((foundUser) => {
-      // grab all location objects for this user that occured in the last thirty days
-      const locationObjectsInLastNDays = {};
+  // verify user auth token
+  admin.auth().verifyIdToken(req.query.uid)
+    .then((decodedToken) => {
+      const userID = decodedToken.uid;
 
-      foundUser.frequentLocations.forEach((locationObj) => {
-        // check if in last N days
-        if ((new Date().getTime() - locationObj.endTime) / (1000 * 60 * 60 * 24) <= days) {
-          // generate nicely formatted date string
-          const date = new Date(locationObj.endTime);
-          const formatted = `${date.getMonth() + 1}/${date.getDate() < 10 ? `0${date.getDate()}` : date.getDate()}/${date.getFullYear()}`;
+      User.findOne({ _id: userID })
+        .then((foundUser) => {
+          // grab all location objects for this user that occured in the last thirty days
+          const locationObjectsInLastNDays = {};
 
-          // store in collection on that day
-          if (locationObjectsInLastNDays[formatted]) {
-            locationObjectsInLastNDays[formatted].push(locationObj);
-          } else {
-            locationObjectsInLastNDays[formatted] = [];
-            locationObjectsInLastNDays[formatted].push(locationObj);
-          }
-        }
-      });
+          foundUser.frequentLocations.forEach((locationObj) => {
+            // check if in last N days
+            if ((new Date().getTime() - locationObj.endTime) / (1000 * 60 * 60 * 24) <= days) {
+              // generate nicely formatted date string
+              const date = new Date(locationObj.endTime);
+              const formatted = `${date.getMonth() + 1}/${date.getDate() < 10 ? `0${date.getDate()}` : date.getDate()}/${date.getFullYear()}`;
 
-      // sort the object keys by date
-      const locationsOrderedByDate = {};
+              // store in collection on that day
+              if (locationObjectsInLastNDays[formatted]) {
+                locationObjectsInLastNDays[formatted].push(locationObj);
+              } else {
+                locationObjectsInLastNDays[formatted] = [];
+                locationObjectsInLastNDays[formatted].push(locationObj);
+              }
+            }
+          });
 
-      Object.keys(locationObjectsInLastNDays).sort().forEach((key) => {
-        locationsOrderedByDate[key] = locationObjectsInLastNDays[key];
-      });
+          // sort the object keys by date
+          const locationsOrderedByDate = {};
 
-      // build the output to send to the user with averaged values
-      const output = {};
+          Object.keys(locationObjectsInLastNDays).sort().forEach((key) => {
+            locationsOrderedByDate[key] = locationObjectsInLastNDays[key];
+          });
 
-      Object.keys(locationsOrderedByDate).forEach((date) => {
-        const dateObservations = locationsOrderedByDate[date];
+          // build the output to send to the user with averaged values
+          const output = {};
 
-        // sum up productivity levels and count productivity levels
-        let sum = 0;
-        let count = 0;
+          Object.keys(locationsOrderedByDate).forEach((date) => {
+            const dateObservations = locationsOrderedByDate[date];
 
-        dateObservations.forEach((obs) => {
-          count += 1;
-          sum += obs.productivity ? obs.productivity : 0;
+            // sum up productivity levels and count productivity levels
+            let sum = 0;
+            let count = 0;
+
+            dateObservations.forEach((obs) => {
+              count += 1;
+              sum += obs.productivity ? obs.productivity : 0;
+            });
+
+            output[date] = (count === 0 ? 0 : sum / count);
+          });
+
+          res.send({ output, days });
+        })
+        .catch(() => {
+          res.status(500).send(`No user found with id: ${userID}`);
         });
-
-        output[date] = (count === 0 ? 0 : sum / count);
-      });
-
-      res.send({ output, days });
     })
-    .catch(() => {
-      res.status(500).send(`No user found with id: ${req.query.uid}`);
+    // user authentication failed
+    .catch((error) => {
+      res.status(401).send(error);
     });
 };
 
@@ -1303,67 +1358,78 @@ export const updateUserSettings = (req, res, next) => {
     userID, homeLocation, homeLocationLatLong, presetProductiveLocations,
   } = req.body;
 
-  User.findOne({ _id: userID })
-    .then((foundUser) => {
-      foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
-      foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
+  // verify user auth token
+  admin.auth().verifyIdToken(userID)
+    .then((decodedToken) => {
+      const uid = decodedToken.uid;
 
-      const newPresetProductiveLocations = {};
+      User.findOne({ _id: uid })
+        .then((foundUser) => {
+          foundUser.homeLocation = homeLocation; // set the home Location appropriately e.g. "Dartmouth Street, Boston, MA,USA"
+          foundUser.latlongHomeLocation = homeLocationLatLong; // set the latLong for the user appropriately e.g. "42.3485196, -71.0765708"
 
-      // only grab observations where productivity score about 0 was recorded
-      Object.keys(presetProductiveLocations).forEach((address) => {
-        if (presetProductiveLocations[address] > 0) {
-          newPresetProductiveLocations[address] = presetProductiveLocations[address];
-        }
-      });
+          const newPresetProductiveLocations = {};
 
-      foundUser.presetProductiveLocations = newPresetProductiveLocations; // set productivity levels for known locations
-
-      // now, go into all the locations of this user and set strings and productivities respectively
-      const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
-      const promises = [];
-
-      foundUser.frequentLocations.forEach((locationObj) => {
-        promises.push(new Promise((resolve, reject) => {
-          if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
-            if (!locationObj.productivity) {
-              locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
+          // only grab observations where productivity score about 0 was recorded
+          Object.keys(presetProductiveLocations).forEach((address) => {
+            if (presetProductiveLocations[address] > 0) {
+              newPresetProductiveLocations[address] = presetProductiveLocations[address];
             }
-          }
-          resolve();
-        }));
-      });
+          });
 
-      Promise.all(promises)
-        .then((results) => {
-          // end result should be foundUser.presetProductiveLocations = { "9 Maynard Street, Hanover, NH": 5, "Dartmouth Street, Boston, MA,USA": 3 }
-          foundUser.save()
-            .then((response) => {
-              res.send({ message: `Success saving user settings for user with id ${userID}` });
-            })
-            .catch((err) => {
-              if (err) {
-                res.status(500).send(`Error upon saving user settings for user with id ${userID}`);
+          foundUser.presetProductiveLocations = newPresetProductiveLocations; // set productivity levels for known locations
+
+          // now, go into all the locations of this user and set strings and productivities respectively
+          const allPresetProductiveLocationAddresses = Object.keys(foundUser.presetProductiveLocations);
+          const promises = [];
+
+          foundUser.frequentLocations.forEach((locationObj) => {
+            promises.push(new Promise((resolve, reject) => {
+              if (allPresetProductiveLocationAddresses.includes(locationObj.location.formatted_address)) {
+                if (!locationObj.productivity) {
+                  locationObj.productivity = presetProductiveLocations[locationObj.location.formatted_address];
+                }
               }
+              resolve();
+            }));
+          });
+
+          Promise.all(promises)
+            .then((results) => {
+              // end result should be foundUser.presetProductiveLocations = { "9 Maynard Street, Hanover, NH": 5, "Dartmouth Street, Boston, MA,USA": 3 }
+              foundUser.save()
+                .then((response) => {
+                  res.send({ message: `Success saving user settings for user with id ${uid}` });
+                })
+                .catch((err) => {
+                  if (err) {
+                    res.status(500).send(`Error upon saving user settings for user with id ${uid}`);
+                  }
+                });
+            })
+            .catch((error) => {
+              res.status(500).send(error);
             });
+
+          // after updating Settings, now the productivity of some locations have changed. must now recalculate most/least ProductiveWeekDays
+
+          setMostProductiveWeekDay(uid);
+          setLeastProductiveWeekDay(uid);
+          setMostProductiveWeekDay(uid, 7); // updates mostProductiveWeekDayLast7Days for User Model
+          setLeastProductiveWeekDay(uid, 7);
+          setMostProductiveWeekDay(uid, 30); // mostProductiveWeekDayLast30Days for User Model
+          setLeastProductiveWeekDay(uid, 30);
         })
         .catch((error) => {
-          res.status(500).send(error);
+          if (error) {
+            res.status(500).send(`Error upon saving user settings for user with id ${uid}. Could not find user.`);
+          }
         });
-
-      // after updating Settings, now the productivity of some locations have changed. must now recalculate most/least ProductiveWeekDays
-
-      setMostProductiveWeekDay(userID);
-      setLeastProductiveWeekDay(userID);
-      setMostProductiveWeekDay(userID, 7); // updates mostProductiveWeekDayLast7Days for User Model
-      setLeastProductiveWeekDay(userID, 7);
-      setMostProductiveWeekDay(userID, 30); // mostProductiveWeekDayLast30Days for User Model
-      setLeastProductiveWeekDay(userID, 30);
+      // ...
     })
+    // user authentication failed
     .catch((error) => {
-      if (error) {
-        res.status(500).send(`Error upon saving user settings for user with id ${userID}. Could not find user.`);
-      }
+      res.status(401).send(error);
     });
 };
 
